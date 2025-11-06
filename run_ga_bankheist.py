@@ -21,8 +21,15 @@ from agent_policy import TOTAL_WEIGHTS
 print("--- 🧬 Avvio Evoluzione per BankHeist (RAM Mode) ---")
 
 # --- 0. Cartella di output ---
-OUTPUT_DIR = "ga_results"
-os.makedirs(OUTPUT_DIR, exist_ok=True) # <-- 2. CREA LA CARTELLA
+# <--- MODIFICA: Trova la cartella genitore (root della repo) ---
+# Ottieni il percorso di questo script
+root_dir = os.path.dirname(os.path.abspath(__file__))
+# Definisci la cartella di output all'interno della root
+OUTPUT_DIR = os.path.join(root_dir, "evolution_results") 
+# -------------------------------------------------------------
+
+print(f"--- 📂 Output sarà salvato in: {OUTPUT_DIR} ---")
+os.makedirs(OUTPUT_DIR, exist_ok=True) # <-- CREA LA CARTELLA (nella root)
 
 # --- 1. Parametri per il GA ---
 args = {}
@@ -32,7 +39,7 @@ args = {}
 args["num_vars"] = TOTAL_WEIGHTS
 
 # Parametri del GA
-args["pop_size"] = 20        # <-- Aumentato (20 è troppo poco)
+args["pop_size"] = 20       # <-- Aumentato (20 è troppo poco)
 args["max_generations"] = 10 # <-- Aumentato (10 è troppo poco)
 
 # --- NOTA BENE ---
@@ -57,6 +64,9 @@ seed = None
 rng = Random(seed)
 
 try:
+    # <--- MODIFICA: Definiamo un timestamp UNICO ---
+    timestamp_str = datetime.now().strftime('%Y%m%d_%H%M%S')
+    
     best_individual, best_fitness, final_pop = run_ga(rng, 
                                                       display=display,
                                                       problem_class=BankHeistProblem,
@@ -74,12 +84,15 @@ try:
         "best_weights": best_individual.tolist()
     }
 
-    with open(f"best_solution_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json", 'w') as f:
+    # <--- MODIFICA: Usa OUTPUT_DIR e il timestamp ---
+    json_filename = os.path.join(OUTPUT_DIR, f"best_solution_{timestamp_str}.json")
+    with open(json_filename, 'w') as f:
         json.dump(results, f, indent=2)
 
-    print("\n💾 Soluzione salvata!")
+    print(f"\n💾 Soluzione salvata in: {json_filename}")
     if display:
         print("\nSalvataggio grafico fitness...")
+        # <--- MODIFICA: Usa OUTPUT_DIR e il timestamp (ora definito) ---
         plot_filename = os.path.join(OUTPUT_DIR, f"fitness_trend_{timestamp_str}.png")
         
         try:

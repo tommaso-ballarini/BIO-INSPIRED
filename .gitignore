@@ -1,0 +1,17 @@
+# Ignora la cache di Python
+__pycache__/
+*.pyc
+
+# Ignora la cartella degli output generati
+evolution_results/
+
+# Ignora file di output sparsi (come da tua immagine)
+best_solution_*.json
+fitness_trend_*.png
+
+# Ignora ambienti virtuali (buona pratica)
+venv/
+.venv/
+
+# Ignora file specifici dell'editor (es. VSCode)
+.vscode/
