@@ -1,0 +1,6 @@
+inspyred
+gymnasium[atari]
+moviepy
+ipython
+numpy
+matplotlib
