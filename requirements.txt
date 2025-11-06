@@ -4,3 +4,5 @@ moviepy
 ipython
 numpy
 matplotlib
+neat-python  
+graphviz     
