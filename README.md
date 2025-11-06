@@ -1,47 +1,62 @@
-# 🧬 Progetto Bank Heist - Neuroevoluzione
+## Project Structure
 
-Questo progetto utilizza un Algoritmo Genetico (GA) per evolvere una semplice rete neurale (policy) in grado di giocare al gioco Atari "Bank Heist" utilizzando direttamente la RAM del gioco (128 byte) come input.
+This project follows a modular, decoupled architecture to facilitate experimentation with different neuroevolution algorithms and environments.
+
+* **`/core`**: Contains the abstract, reusable logic.
+    * `policy.py`: Defines the agent's "brain" (e.g., a linear model, a neural network).
+    * `evaluator.py`: Manages the environment simulation (the "arena") to run a single fitness evaluation.
+    * `problem.py`: Acts as a bridge, connecting the agent's policy and the evaluator to the interface required by an evolutionary algorithm library (like `inspyred`).
+
+* **`/algorithms`**: Holds the "engines" or main loops for different evolutionary strategies (e.g., `inspyred_runner.py` for a standard GA, `neat_runner.py` for NEAT).
+
+* **`/experiments`**: Contains the executable scripts. Each file represents a single, configurable experiment, importing and "wiring together" components from `/core` and `/algorithms`.
+
+* **`/configs`**: Stores parameter files required by specific algorithms (e.g., NEAT configuration).
+
+* **`/utils`**: Provides non-essential helper scripts, such as plotting and visualization tools.
+
+* **`/evolution_results`**: Serves as the default output directory for saved models, logs, and graphs.
 
 ---
 
-## 🛠️ Struttura del Progetto
+## Current Structure
 
-Ecco una panoramica dei file principali e del loro ruolo nel sistema:
+BIO-INSPIRED/
 
-### 🧠 `agent_policy.py`: Il Cervello
+├── algorithms/
 
-* **Ruolo:** Definisce il "cervello" dell'agente, una rete neurale a singolo strato.
-* **Logica:** Prende i **128 byte** della RAM (`game_state`) come input.
-* **Azione:** Utilizza un "cromosoma" (un vettore di **2322 pesi**) per calcolare un punteggio per ognuna delle **18 azioni** possibili e sceglie la migliore.
+│   ├── inspyred_runner.py
 
-### 🏛️ `evaluator.py`: L'Arena
+│   └── neat_runner.py 	
 
-* **Ruolo:** È il simulatore di gioco che esegue la *fitness function*.
-* **Logica:** Avvia un'istanza di "Bank Heist" (`gymnasium`).
-* **Azione:** Testa un singolo cervello (cromosoma) facendolo giocare una partita. Il `fitness_score` restituito è semplicemente il punteggio (`total_reward`) ottenuto in quella partita.
+├── configs/
 
-### 📋 `bank_heist_problem.py`: L'Adattatore
+│   └── neat_bankheist_config.txt
 
-* **Ruolo:** Collega la logica specifica del nostro gioco al framework generico `inspyred`.
-* **Logica:** Definisce tre componenti chiave per `inspyred`:
-    1.  **`generator`**: Come creare un nuovo cervello (un array di 2322 float casuali).
-    2.  **`evaluator`**: Come testare una popolazione (chiama `run_game_simulation` per ogni cervello).
-    3.  **`bounder`**: Come mantenere i pesi (geni) entro i limiti (da -1.0 a 1.0).
+├── core/
 
-### 🏃‍♂️ `run_ga_bankheist.py`: Il Pannello di Controllo
+│   ├── evaluator.py
 
-* **Ruolo:** È lo script principale che **avvia l'esperimento**.
-* **Logica:** Configura i parametri dell'evoluzione (dimensione della popolazione, generazioni, tassi di mutazione/crossover).
-* **Azione:** Chiama il motore GA, gestisce l'esecuzione e, al termine, salva i risultati (il file `.json` con i pesi migliori e il grafico `.png` della fitness) nella cartella `ga_results/`.
+│   └── policy.py
 
-### ⚙️ `lab_ga_runner.py`: Il Motore Evolutivo
+│   └── problem.py
 
-* **Ruolo:** Contiene la logica *generica* per eseguire l'algoritmo genetico.
-* **Logica:** È un template riutilizzabile che orchestra il processo di evoluzione: selezione (`tournament_selection`), accoppiamento (`uniform_crossover`) e mutazione (`gaussian_mutation`).
-* **Azione:** Esegue il ciclo `evolve` generazione dopo generazione.
+├── experiments/
 
-### 📊 `lab_plotting_utils.py`: L'Osservatore
+│   ├── run_bankheist_ga.py
 
-* **Ruolo:** Contiene il codice per visualizzare l'andamento dell'evoluzione.
-* **Logica:** La funzione `plot_observer` viene chiamata ad ogni generazione.
-* **Azione:** Aggiorna e disegna il grafico che mostra la fitness migliore, media e peggiore nel tempo.
+│   └── run_bankheist_neat.py 
+
+├── utils/
+
+│   ├── lab_plotting_utils.py
+
+│   └── neat_plotting_utils.py 
+
+├── evolution_results/
+
+└── requirements.txt
+
+
+
+
