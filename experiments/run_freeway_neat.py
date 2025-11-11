@@ -23,8 +23,8 @@ from utils.neat_plotting_utils import plot_stats, plot_species, draw_net
 # --- 0. Parametri dell'Esperimento ---
 ENV_NAME = "ALE/Freeway-v5"
 CONFIG_FILE_NAME = "neat_freeway_config.txt"
-NUM_GENERATIONS = 50 # Basso per un test, per un run reale usa 100+
-MAX_STEPS = 1500
+NUM_GENERATIONS = 5 # Basso per un test, per un run reale usa 100+
+MAX_STEPS = 3000 #1500
 
 # Trova la cartella di output e il file di config
 root_dir = project_root

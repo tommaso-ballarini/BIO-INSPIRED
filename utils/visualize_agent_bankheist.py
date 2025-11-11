@@ -8,7 +8,21 @@ import json
 import os
 import sys
 from functools import partial
-from agent_policy import decide_move
+import sys, os
+import sys, os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
+from core.policy import LinearPolicy
+
+# qui devi sapere quante feature e quante azioni usa il tuo ambiente
+NUM_FEATURES = 128      # esempio per RAM Atari, cambia se diverso
+NUM_ACTIONS = 18        # esempio Bank Heist, cambia se diverso
+
+policy = LinearPolicy(NUM_FEATURES, NUM_ACTIONS)
+
+def decide_move(game_state, weights):
+    return policy.decide_move(game_state, weights)
+
 
 
 # Registra gli ambienti Atari
@@ -89,8 +103,8 @@ def play_game_visual(weights, num_episodes=3, max_steps=2000, render_mode='human
 
 def find_latest_solution():
     """Trova automaticamente l'ultimo file JSON nella cartella evolution_results"""
-    results_dir = os.path.join(os.path.dirname(__file__), "BIO-INSPIRED/evolution_results")
-    
+    results_dir = os.path.join(os.path.dirname(__file__), "..", "evolution_results")
+
     if not os.path.exists(results_dir):
         print(f"❌ Cartella {results_dir} non trovata!")
         print("   Esegui prima 'python run_ga_bankheist.py' per generare una soluzione.")

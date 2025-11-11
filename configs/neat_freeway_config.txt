@@ -1,18 +1,29 @@
-# FILE: configs/neat_bankheist_config.txt
+# FILE: configs/neat_freeway_config.txt
 
 [NEAT]
 fitness_criterion     = max
-fitness_threshold     = 1000000
+fitness_threshold     = 100  
+# Più realistico per Freeway
 # Un punteggio quasi impossibile, non fermarti
-pop_size              = 50
-reset_on_extinction   = False
+pop_size              = 200
+reset_on_extinction   = True  
+# Permetti reset
+no_fitness_termination = False
 
 [DefaultGenome]
 # === Connessione al nostro problema ===
 # Abbiamo 128 input (RAM) e 3 output (Azioni)
 num_inputs              = 128
 num_outputs             = 3
-num_hidden              = 0
+num_hidden              = 0 
+#0
+single_structural_mutation = false
+structural_mutation_surer = default
+bias_init_type = gaussian
+response_init_type = gaussian
+weight_init_type = gaussian
+enabled_rate_to_true_add = 0.0
+enabled_rate_to_false_add = 0.0
 
 # --- Parametri di default ---
 activation_default      = tanh
@@ -28,13 +39,13 @@ bias_init_stdev         = 1.0
 bias_max_value          = 30.0
 bias_min_value          = -30.0
 bias_mutate_power       = 0.5
-bias_mutate_rate        = 0.7
+bias_mutate_rate        = 0.8
 bias_replace_rate       = 0.1
 
 compatibility_disjoint_coefficient = 1.0
 compatibility_weight_coefficient   = 0.5
 
-conn_add_prob           = 0.1  
+conn_add_prob           = 0.3 
 # Probabilità di aggiungere una connessione
 conn_delete_prob        = 0.1  
 # Probabilità di rimuovere una connessione
@@ -46,7 +57,7 @@ feed_forward            = True
 # Rete non ricorrente (più semplice per iniziare)
 initial_connection      = full
 
-node_add_prob           = 0.1  
+node_add_prob           = 0.2 
 # Probabilità di aggiungere un neurone
 node_delete_prob        = 0.1  
 # Probabilità di rimuovere un neurone
@@ -64,11 +75,11 @@ weight_init_stdev       = 1.0
 weight_max_value        = 30.0
 weight_min_value        = -30.0
 weight_mutate_power     = 0.5
-weight_mutate_rate      = 0.8
+weight_mutate_rate      = 0.9
 weight_replace_rate     = 0.1
 
 [DefaultSpeciesSet]
-compatibility_threshold = 3.0
+compatibility_threshold = 2.0
 
 
 [DefaultStagnation]
@@ -79,5 +90,6 @@ species_elitism      = 2
 [DefaultReproduction]
 elitism            = 2
 survival_threshold = 0.2
+min_species_size = 1
 
 #checkpoint_save_interval = 25
