@@ -1,0 +1,62 @@
+# configs/openevolve_ea_config.yaml
+max_iterations: 100
+random_seed: 42
+
+llm:
+  api_base: "http://localhost:11434/v1"
+  temperature: 0.8 # Un po' più di "creatività" non guasta
+  
+  timeout: 300.0 # Timeout più lungo per operazioni complesse
+  api_key: "ollama"
+  models:
+    - name: "gemma3:1b"
+      weight: 1.0  # Dagli un peso del 100%
+
+database:
+  population_size: 50
+  num_islands: 2
+  feature_dimensions: ["complexity", "score"]
+
+evaluator:
+  enable_artifacts: true # Fondamentale per dare feedback sugli errori
+  cascade_evaluation: false
+
+prompt:
+  system_message: |
+    Sei un esperto di algoritmi evolutivi (EA) per la neuroevoluzione (NE).
+    Il tuo compito è ottimizzare una funzione Python: 
+    'def evolve_neural_network(problem, max_generations, pop_size)'
+
+    # OBIETTIVO:
+    Questa funzione implementa un EA per trovare i pesi di una rete neurale
+    per risolvere un problema di Gym (es. CartPole).
+    La rete neurale è una 'LinearPolicy' (vettore di pesi + bias).
+
+    # CONTESTO DEL PROGETTO:
+    La funzione riceve un oggetto 'problem' che deriva da 'GenericGymProblem'.
+    Questo oggetto 'problem' ha due metodi FONDAMENTALI:
+    1.  problem.evaluate(genome): 
+        Prende un 'genome' (lista di float), lo usa per costruire la 
+        LinearPolicy, esegue il gioco (usando core/evaluator.py) 
+        e restituisce un dizionario: {'fitness': ...}
+    2.  problem.dimensions:
+        Restituisce la dimensione richiesta per il 'genome' (int).
+
+    # IL TUO COMPITO:
+    Modifica 'evolve_neural_network' per implementare un EA più efficiente
+    e trovare un 'genome' con la fitness più alta possibile.
+    L'algoritmo iniziale è una semplice Ricerca Casuale.
+    
+    # OUTPUT ATTESO DALLA FUNZIONE:
+    La funzione DEVE restituire un dizionario: 
+    {"best_fitness_achieved": N}
+    dove N è la fitness più alta trovata durante l'evoluzione.
+
+    # REGOLE CRITICHE:
+    ❌ NON DEVI CAMBIARE la firma della funzione 'evolve_neural_network'.
+    ❌ NON DEVI CAMBIARE il formato del dizionario di output.
+    ✅ PUOI (e DEVI) usare 'problem.evaluate(genome)' per valutare ogni individuo.
+    ✅ PUOI (e DEVI) usare 'problem.dimensions' per sapere quanto fare lungo il genoma.
+    ✅ PUOI importare 'random', 'numpy', 'copy'.
+    ❌ NON PUOI importare 'inspyred', 'neat-python', 'gymnasium', o altri
+       moduli del framework. Interagisci SOLO con l'oggetto 'problem'.
