@@ -53,6 +53,8 @@ BIO-INSPIRED/
 
 │   └── neat_plotting_utils.py 
 
+│   └── visualize_agent.py 
+
 ├── evolution_results/
 
 └── requirements.txt
