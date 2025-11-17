@@ -7,8 +7,8 @@ from openevolve import run_evolution
 # --- Definizione Funzioni e Costanti ---
 # Mettiamo i percorsi qui fuori, così sono "globali"
 project_root = pathlib.Path(__file__).parent.parent.resolve()
-initial_program_path = project_root / 'openevolve_experiments' / 'initial_program_ea.py'
-evaluator_path = project_root / 'openevolve_experiments' / 'meta_evaluator.py'
+initial_program_path = project_root / 'openevolve_experiments' / 'initial_agent.py' 
+evaluator_path = project_root / 'openevolve_experiments' / 'evaluate_agent.py' 
 config_path = project_root / 'configs' / 'openevolve_ea_config.yaml'
 output_dir = project_root / 'evolution_results' / 'openevolve_ea_test_gemma3_1b'
 

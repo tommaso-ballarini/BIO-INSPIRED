@@ -1,62 +1,105 @@
-# configs/openevolve_ea_config.yaml
-max_iterations: 100
+# --- Impostazioni Generali ---
+max_iterations: 20  # Iniziamo con 20 per un test rapido
 random_seed: 42
+log_level: "INFO"
 
+# --- Impostazioni di Evoluzione ---
+# SOLUZIONE PER IL CRASH "No valid diffs":
+# Messo al livello root (come da default_config) e impostato a 'false' 
+# per dire all'LLM di restituire il file completo.
+diff_based_evolution: false
+
+# --- Configurazione LLM ---
 llm:
-  api_base: "http://localhost:11434/v1"
-  temperature: 0.8 # Un po' più di "creatività" non guasta
-  
-  timeout: 300.0 # Timeout più lungo per operazioni complesse
-  api_key: "ollama"
   models:
-    - name: "gemma3:1b"
-      weight: 1.0  # Dagli un peso del 100%
+    # Usa il tuo modello locale
+    - name: "gemma3:4b"
+      weight: 1.0
+  
+  # Punta al tuo server Ollama
+  api_base: "http://localhost:11434/v1"
+  api_key: "ollama"  # (O 'none', Ollama non lo richiede)
+  
+  temperature: 1
+  timeout: 500
+  retries: 2
 
-database:
-  population_size: 50
-  num_islands: 2
-  feature_dimensions: ["complexity", "score"]
-
-evaluator:
-  enable_artifacts: true # Fondamentale per dare feedback sugli errori
-  cascade_evaluation: false
-
+# --- Configurazione Prompt ---
+# --- Configurazione Prompt ---
 prompt:
+  # Il tuo system_message personalizzato è la chiave
   system_message: |
-    Sei un esperto di algoritmi evolutivi (EA) per la neuroevoluzione (NE).
-    Il tuo compito è ottimizzare una funzione Python: 
-    'def evolve_neural_network(problem, max_generations, pop_size)'
+    You are an expert Artificial Intelligence and Reinforcement Learning engineer,
+    specialized in optimizing agents for Atari games.
+  
+    # OBJECTIVE
+    Your task is to evolve a Python agent to play the Atari game "Freeway-v4".
+    Your goal is to maximize the score
 
-    # OBIETTIVO:
-    Questa funzione implementa un EA per trovare i pesi di una rete neurale
-    per risolvere un problema di Gym (es. CartPole).
-    La rete neurale è una 'LinearPolicy' (vettore di pesi + bias).
+    # AGENT CONTEXT
+    You will receive a Python file defining a single function:
+    `def get_action(observation):`
 
-    # CONTESTO DEL PROGETTO:
-    La funzione riceve un oggetto 'problem' che deriva da 'GenericGymProblem'.
-    Questo oggetto 'problem' ha due metodi FONDAMENTALI:
-    1.  problem.evaluate(genome): 
-        Prende un 'genome' (lista di float), lo usa per costruire la 
-        LinearPolicy, esegue il gioco (usando core/evaluator.py) 
-        e restituisce un dizionario: {'fitness': ...}
-    2.  problem.dimensions:
-        Restituisce la dimensione richiesta per il 'genome' (int).
+    - `observation`: This is a 128-byte NumPy array, representing the game's RAM.
+    - `return value`: Your function MUST return a single integer:
+        - 0: NOOP (do nothing)
+        - 1: UP (move up)
+        - 2: DOWN (move down)
 
-    # IL TUO COMPITO:
-    Modifica 'evolve_neural_network' per implementare un EA più efficiente
-    e trovare un 'genome' con la fitness più alta possibile.
-    L'algoritmo iniziale è una semplice Ricerca Casuale.
+    # MUTATION TASK
+    The initial agent you are given is very simple (it chooses a random action).
+    Your mutations must make the agent smarter.
+
+    # ALLOWED STRATEGIES
+    # Your task is to discover the LOGIC for playing the game.
+    - You MUST analyze the `observation` array to find relevant bytes.
+    - You MUST use `if/elif/else` logic based on RAM byte values.
     
-    # OUTPUT ATTESO DALLA FUNZIONE:
-    La funzione DEVE restituire un dizionario: 
-    {"best_fitness_achieved": N}
-    dove N è la fitness più alta trovata durante l'evoluzione.
+    # ADVANCED HINTS FOR LOGIC:
+    # - Try to create "heuristic variables" from the RAM, for example:
+    #   chicken_y = observation[50] # (Note: 50 is just an example, you must find the correct byte)
+    #   car_in_lane_1 = observation[17]
+    #
+    # - Try to build a "danger function" or a "decision tree", for example:
+    #   if chicken_y > 100 and chicken_y < 120:
+    #       # Now check for cars
+    #       if observation[18] > chicken_y:
+    #           return 1 # Move UP
+    #
+    # - You may use global variables to maintain a simple "state" or "memory"
+    #   (e.g., to remember the last move), but simple reactive logic is preferred.
 
-    # REGOLE CRITICHE:
-    ❌ NON DEVI CAMBIARE la firma della funzione 'evolve_neural_network'.
-    ❌ NON DEVI CAMBIARE il formato del dizionario di output.
-    ✅ PUOI (e DEVI) usare 'problem.evaluate(genome)' per valutare ogni individuo.
-    ✅ PUOI (e DEVI) usare 'problem.dimensions' per sapere quanto fare lungo il genoma.
-    ✅ PUOI importare 'random', 'numpy', 'copy'.
-    ❌ NON PUOI importare 'inspyred', 'neat-python', 'gymnasium', o altri
-       moduli del framework. Interagisci SOLO con l'oggetto 'problem'.
+    # CRITICAL RULES
+    1. The file MUST contain the function `def get_action(observation):`.
+    2. You cannot import external libraries other than `numpy`.
+    3. The evolution is blind; make small, targeted mutations.
+    4. Return only the complete Python code.
+  
+    
+  # Includi gli errori (stderr) nei prompt futuri
+  include_artifacts: true
+
+  num_top_programs: 1
+  num_diverse_programs: 2
+
+# --- Configurazione Database (MAP-Elites) ---
+database:
+  population_size: 100  # Riduciamo per un test rapido (default è 1000)
+  num_islands: 2       # Riduciamo per un test rapido (default è 5)
+  
+  # Usiamo 'score' (dal tuo valutatore) e 'complexity' (integrato)
+  # come assi per la diversità
+  feature_dimensions:
+    - "complexity"
+    - "score"
+  feature_bins: 10
+
+# --- Configurazione Valutatore ---
+evaluator:
+  timeout: 300
+  cascade_evaluation: false
+  use_llm_feedback: false
+  
+  # AGGIUNGI QUESTO TWEAK:
+  # Esegui 8 valutazioni in parallelo
+  parallel_evaluations: 4
