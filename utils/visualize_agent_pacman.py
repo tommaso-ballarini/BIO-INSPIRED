@@ -26,7 +26,7 @@ def get_latest_file(folder, prefix):
     return os.path.join(folder, candidates[0])
 
 
-def visualize_neat(env_name, result_dir, config_path, max_steps=6000):
+def visualize_neat(env_name, result_dir, config_path, max_steps=10000, num_episodes=10): # <--- AGGIUNTA: num_episodes
     """Carica e visualizza il miglior agente NEAT in simulazione."""
     best_genome_file = get_latest_file(result_dir, "best_genome_neat_")
     if best_genome_file is None:
@@ -62,40 +62,61 @@ def visualize_neat(env_name, result_dir, config_path, max_steps=6000):
         return int(np.argmax(output))
 
     print("=" * 70)
-    print("🎮 AVVIO VISUALIZZAZIONE MS. PAC-MAN")
+    print("🎮 AVVIO VALUTAZIONE MULTI-EPISODIO MS. PAC-MAN")
     print("=" * 70)
     print(f"🧬 Genoma: {os.path.basename(best_genome_file)}")
-    print(f"🏆 Fitness allenamento: {winner.fitness:.2f}")
-    print(f"⏱️  Max steps: {max_steps}")
+    print(f"🏆 Fitness allenamento (MAX): {winner.fitness:.2f}")
+    print(f"⏱️  Max steps: {max_steps}")
+    print(f"🔄 Episodi di test: {num_episodes}") # <--- NUOVA RIGA
     print("=" * 70)
 
-    try:
-        fitness, metrics = run_game_simulation(
-            agent_decision_function=agent_decision_function,
-            env_name=env_name,
-            max_steps=max_steps,
-            obs_type="ram",
-            frameskip=1,  # Stesso valore usato nel training
-            repeat_action_probability=0.0,  # Stesso valore usato nel training
-            render=True,  # Abilita visualizzazione
-        )
-    except TypeError:
-        # fallback se run_game_simulation non accetta render=
-        fitness, metrics = run_game_simulation(
-            agent_decision_function=agent_decision_function,
-            env_name=env_name,
-            max_steps=max_steps,
-            obs_type="ram",
-            frameskip=1,
-            repeat_action_probability=0.0,
-        )
+    fitness_scores = [] # <--- LISTA PER I RISULTATI
 
+    for i in range(num_episodes): # <--- LOOP PER LA VALUTAZIONE
+        # Renderizza solo il primo episodio per visualizzazione.
+        current_render = True if i == 0 else False 
+        
+        # Se utilizzi una rete ricorrente (feed_forward=False), devi resettare lo stato interno:
+        if hasattr(net, 'reset'):
+            net.reset()
+            
+        print(f"Esecuzione Episodio {i+1}/{num_episodes} (Visualizzazione: {current_render})")
+
+        try:
+            fitness, metrics = run_game_simulation(
+                agent_decision_function=agent_decision_function,
+                env_name=env_name,
+                max_steps=max_steps,
+                obs_type="ram",
+                frameskip=4,  # <--- CORREZIONE: Impostato a 4 (come nel tuo training)
+                repeat_action_probability=0.0,
+                render=current_render, # <--- Renderizza solo il primo episodio
+            )
+        except TypeError:
+            # fallback se run_game_simulation non accetta render=
+            fitness, metrics = run_game_simulation(
+                agent_decision_function=agent_decision_function,
+                env_name=env_name,
+                max_steps=max_steps,
+                obs_type="ram",
+                frameskip=4, # <--- CORREZIONE: Impostato a 4
+                repeat_action_probability=0.0,
+            )
+            
+        fitness_scores.append(fitness) # <--- AGGIUNGI IL RISULTATO ALLA LISTA
+
+    # Calcola statistiche aggregate
+    avg_fitness = np.mean(fitness_scores)
+    std_fitness = np.std(fitness_scores)
+    
     print("\n" + "=" * 70)
-    print("📊 RISULTATI EPISODIO")
+    print("📊 RISULTATI AGGREGATI (SU PIÙ EPISODI)")
     print("=" * 70)
-    print(f"🎯 Fitness: {fitness:.2f}")
+    print(f"🎯 Fitness Media: {avg_fitness:.2f} (Deviazione Standard: {std_fitness:.2f})")
+    print(f"📈 Fitness Min/Max Test: {np.min(fitness_scores):.2f} / {np.max(fitness_scores):.2f}")
     if metrics is not None:
-        print(f"📈 Metrics: {metrics}")
+        # Mostra le metriche dell'ultimo episodio.
+        print(f"📈 Metriche Ultimo Episodio: {metrics}")
     print("=" * 70)
 
 
@@ -103,6 +124,10 @@ if __name__ == "__main__":
     ENV_NAME = "ALE/MsPacman-v5"
     RESULT_DIR = os.path.join(PROJECT_ROOT, "evolution_results")
     CONFIG_PATH = os.path.join(PROJECT_ROOT, "configs", "neat_pacman_config.txt")
+    
+    # Imposta i parametri di valutazione
+    TEST_MAX_STEPS = 10000 # <--- MODIFICA: Allineato al training
+    TEST_NUM_EPISODES = 10 # <--- NUOVO: Numero di episodi da eseguire (es. 10)
 
     if not os.path.isdir(RESULT_DIR):
         print(f"❌ Cartella {RESULT_DIR} non trovata. Esegui prima l'evoluzione NEAT.")
@@ -112,5 +137,6 @@ if __name__ == "__main__":
         env_name=ENV_NAME,
         result_dir=RESULT_DIR,
         config_path=CONFIG_PATH,
-        max_steps=6000,  # Stesso max_steps del training
+        max_steps=TEST_MAX_STEPS, # Passa il nuovo valore di max_steps
+        num_episodes=TEST_NUM_EPISODES, # Passa il numero di episodi
     )

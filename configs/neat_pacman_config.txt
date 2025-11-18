@@ -2,9 +2,19 @@
 
 [NEAT]
 fitness_criterion     = max
-fitness_threshold     = 10000.0
+
+# Termina l'evoluzione se un genoma raggiunge questo fitness
+# - Abbassa se vuoi terminare prima con risultati accettabili
+# - Alza se vuoi continuare a evolvere oltre risultati medi
+fitness_threshold     = 15000.0
+
+# Numero di individui per generazione
+# Alza: più diversità, esplorazione migliore, ma molto più lento
+# Abbassa: più veloce ma meno esplorazione, rischio di convergenza prematura
 pop_size              = 100
-reset_on_extinction   = True
+
+# Cambiato: evita reset completi
+reset_on_extinction   = False 
 no_fitness_termination = False
 
 [DefaultGenome]
@@ -13,7 +23,11 @@ structural_mutation_surer = default
 # === Input/Output ===
 num_inputs              = 128
 num_outputs             = 9
-num_hidden              = 0
+
+# Neuroni nascosti iniziali (era = 0)
+# Alza (5-10): la rete parte più complessa, può apprendere pattern complessi subito
+# Rischio: troppi neuroni rallentano l'evoluzione e causano overfitting
+num_hidden              = 4
 
 # === Attivazione ===
 activation_default      = tanh
@@ -31,29 +45,47 @@ bias_init_stdev         = 1.0
 bias_init_type = gaussian
 bias_max_value          = 30.0
 bias_min_value          = -30.0
-bias_mutate_power       = 0.5
-bias_mutate_rate        = 0.7
-bias_replace_rate       = 0.1
+bias_mutate_power       = 0.6
+bias_mutate_rate        = 0.75
+bias_replace_rate       = 0.12
 
 # === Compatibilità ===
 compatibility_disjoint_coefficient = 1.0
-compatibility_weight_coefficient   = 0.5
+compatibility_weight_coefficient   = 0.6
 
 # === Connessioni ===
-conn_add_prob           = 0.3
-conn_delete_prob        = 0.1
+
+# Si riferiscono alla probabilità di aggiungere/rimuovere connessioni
+#Per migliorare:
+#Alza conn_add_prob (0.4-0.5): crescita più rapida, reti più complesse
+#Abbassa conn_delete_prob (0.05): mantiene più struttura
+#Bilanciamento: conn_add > conn_delete per crescita netta
+conn_add_prob           = 0.4
+conn_delete_prob        = 0.08
+
 enabled_default         = True
 enabled_mutate_rate     = 0.01
 enabled_rate_to_true_add = 0.0
 enabled_rate_to_false_add = 0.0
 
 # === Struttura ===
+# provare a mettere False perche cosi si ricorda dei fantasmini
 feed_forward            = True
+
+# 'full_direct': Ogni input connesso direttamente a ogni output all'inizio
+# "partial_direct 0.5": solo 50% delle connessioni iniziali (rete più semplice)
+# "full_nodirect": nessuna connessione iniziale (parte da zero, molto lento)
 initial_connection      = full_direct
 
 # === Nodi ===
-node_add_prob           = 0.2
-node_delete_prob        = 0.1
+
+# Cosa fanno: Probabilità di aggiungere/rimuovere neuroni nascosti
+# Per migliorare:
+# Alza node_add_prob (0.3): permette reti più profonde per pattern complessi
+# Abbassa (0.1): mantiene reti semplici e veloci
+# Ms. Pac-Man: è un gioco complesso, considera 0.25-0.3
+node_add_prob           = 0.3
+node_delete_prob        = 0.08
 
 # === Response ===
 response_init_mean      = 1.0
@@ -71,19 +103,61 @@ weight_init_stdev       = 1.0
 weight_init_type = gaussian
 weight_max_value        = 30.0
 weight_min_value        = -30.0
-weight_mutate_power     = 0.5
-weight_mutate_rate      = 0.8
-weight_replace_rate     = 0.1
+
+# Intensità della modifica dei pesi
+weight_mutate_power     = 1
+
+# Probabilità che un peso venga modificato
+weight_mutate_rate      = 0.9
+weight_replace_rate     = 0.12
 
 [DefaultSpeciesSet]
-compatibility_threshold = 3.0
+# Cosa fa: Quanto devono essere diversi i genomi per formare specie separate
+#Per migliorare:
+#Abbassa (2.0-2.5): più specie, più diversità, protegge innovazioni
+#Alza (4.0-5.0): meno specie, convergenza più rapida
+#Ms. Pac-Man: abbassa a 2.5 per proteggere diverse strategie (aggressiva vs difensiva)
+compatibility_threshold = 2.8
 
 [DefaultStagnation]
 species_fitness_func = max
+
+# Cosa fa: Generazioni senza miglioramento prima di eliminare una specie
+#Per migliorare:
+#Alza (20-25): dà più tempo alle strategie lente a maturare
+#Abbassa (10): elimina velocemente strategie non promettenti
+#Consiglio: alza se hai poche generazioni totali
 max_stagnation       = 15
+
+#Cosa fa: Migliori individui di ogni specie passano automaticamente
+#Per migliorare:
+#Alza (3-4): preserva più soluzioni buone
+#Abbassa (1): più pressione evolutiva
 species_elitism      = 2
 
 [DefaultReproduction]
-elitism            = 2
+
+# Cosa fa: Migliori individui globali passano senza modifiche
+#Per migliorare:
+#Alza (3-5): preserva le migliori soluzioni trovate
+#Rischio: troppo alto (>5) rallenta l'evoluzione
+elitism            = 3
+
+# Cosa fa: Solo il top 20% di ogni specie si riproduce
+#Per migliorare:
+#Abbassa (0.15): selezione più aggressiva
+#Alza (0.25-0.3): più individui si riproducono, più diversità
 survival_threshold = 0.2
 min_species_size   = 2
+
+
+
+
+##############################
+# Guarda i grafici generati:
+
+# Fitness in crescita costante: buon segno ✅
+# Fitness piatto per >10 gen: aumenta mutazioni o diversità
+# Fitness oscilla molto: riduci weight_mutate_power
+# Troppe specie (>15): abbassa compatibility_threshold
+# Poche specie (<3): alza compatibility_threshold
