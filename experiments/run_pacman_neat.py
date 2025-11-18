@@ -21,8 +21,8 @@ from utils.neat_plotting_utils import plot_stats, plot_species, draw_net
 # --- 0. Parametri dell'Esperimento ---
 ENV_NAME = "ALE/MsPacman-v5"
 CONFIG_FILE_NAME = "neat_pacman_config.txt"
-NUM_GENERATIONS = 20
-MAX_STEPS = 6000
+NUM_GENERATIONS = 120
+MAX_STEPS = 10000
 
 root_dir = project_root
 OUTPUT_DIR = os.path.join(root_dir, "evolution_results")
@@ -76,7 +76,7 @@ def eval_genomes(genomes, config):
                 env_name=ENV_NAME,
                 max_steps=MAX_STEPS,
                 obs_type="ram",
-                frameskip=1, # DETERMINISTICA: un numero intero tipo 4, L'azione viene ripetuta 4 volte ad ogni step. (Questo è il default per ALE/MsPacman-v5). STOCASTICO:Una tupla di interi, e.g., (2, 5), NESSUNO SKIP: 1
+                frameskip=4, # DETERMINISTICA: un numero intero tipo 4, L'azione viene ripetuta 4 volte ad ogni step. (Questo è il default per ALE/MsPacman-v5). STOCASTICO:Una tupla di interi, e.g., (2, 5), NESSUNO SKIP: 1
                 repeat_action_probability=0.0                   ### CAMBIA PER REGOLARE DIFFICOLTà: 0.5 difficile, 0.25 default, 0 facile deterministico
             )
             
