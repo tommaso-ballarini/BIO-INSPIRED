@@ -7,23 +7,33 @@ import numpy as np
 gym.register_envs(ale_py)
 
 
-def run_game_simulation(agent_decision_function, env_name, max_steps=1500, obs_type="ram", render=False):
+def run_game_simulation(agent_decision_function, env_name, max_steps=1500, obs_type="ram", render=False, frameskip=None, 
+                        repeat_action_probability=None,
+                        mode=None, 
+                        difficulty=None):
     """
     Esegue una simulazione completa del gioco usando la funzione-agente fornita.
     """
+    
+    # 1. Costruisci il dizionario degli argomenti dinamici
+    make_kwargs = {}
+    if obs_type:
+        make_kwargs['obs_type'] = obs_type
+    if frameskip is not None:
+        make_kwargs['frameskip'] = frameskip
+    if repeat_action_probability is not None:
+        make_kwargs['repeat_action_probability'] = repeat_action_probability
+    if mode is not None:
+        make_kwargs['mode'] = mode
+    if difficulty is not None:
+        make_kwargs['difficulty'] = difficulty
     # crea l'ambiente una sola volta
     try:
         if render:
-            # quando vogliamo visualizzare
-            if obs_type:
-                env = gym.make(env_name, obs_type=obs_type, render_mode="human")
-            else:
-                env = gym.make(env_name, render_mode="human")
+            make_kwargs['render_mode'] = "human"
+            env = gym.make(env_name, **make_kwargs) # Usa make_kwargs
         else:
-            if obs_type:
-                env = gym.make(env_name, obs_type=obs_type)
-            else:
-                env = gym.make(env_name)
+            env = gym.make(env_name, **make_kwargs) # Usa make_kwargs
     except Exception as e:
         print(f"Errore creazione ambiente '{env_name}': {e}")
         return 0.0, {}

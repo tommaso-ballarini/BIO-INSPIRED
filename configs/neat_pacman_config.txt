@@ -2,12 +2,14 @@
 
 [NEAT]
 fitness_criterion     = max
-fitness_threshold     = 100.0
+fitness_threshold     = 10000.0
 pop_size              = 100
 reset_on_extinction   = True
 no_fitness_termination = False
 
 [DefaultGenome]
+single_structural_mutation = false
+structural_mutation_surer = default
 # === Input/Output ===
 num_inputs              = 128
 num_outputs             = 9
@@ -26,6 +28,7 @@ aggregation_options     = sum
 # === Bias ===
 bias_init_mean          = 0.0
 bias_init_stdev         = 1.0
+bias_init_type = gaussian
 bias_max_value          = 30.0
 bias_min_value          = -30.0
 bias_mutate_power       = 0.5
@@ -41,6 +44,8 @@ conn_add_prob           = 0.3
 conn_delete_prob        = 0.1
 enabled_default         = True
 enabled_mutate_rate     = 0.01
+enabled_rate_to_true_add = 0.0
+enabled_rate_to_false_add = 0.0
 
 # === Struttura ===
 feed_forward            = True
@@ -53,6 +58,7 @@ node_delete_prob        = 0.1
 # === Response ===
 response_init_mean      = 1.0
 response_init_stdev     = 0.0
+response_init_type = gaussian
 response_max_value      = 30.0
 response_min_value      = -30.0
 response_mutate_power   = 0.0
@@ -62,6 +68,7 @@ response_replace_rate   = 0.0
 # === Pesi ===
 weight_init_mean        = 0.0
 weight_init_stdev       = 1.0
+weight_init_type = gaussian
 weight_max_value        = 30.0
 weight_min_value        = -30.0
 weight_mutate_power     = 0.5
