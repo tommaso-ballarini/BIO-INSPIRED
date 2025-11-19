@@ -16,24 +16,34 @@ class PacmanHybridWrapper(gym.ObservationWrapper):
         self.grid_rows = grid_rows
         self.grid_cols = grid_cols
         
-        # Feature Vector:
+        # --- Feature Vector Calculation ---
         # 0-1: Player (x, y)
         # 2-9: 4 Ghosts (dx, dy) relative to player
         # 10-11: Nearest PowerPill (dx, dy)
-        # 12-13: Nearest Pellet (dx, dy) - Critical for fitness shaping
-        self.n_vector_features = 14 
+        # 12-13: Nearest Pellet (dx, dy)
+        # --- NUOVI INPUT VELOCITÀ ---
+        # 14-21: 4 Ghosts Velocity (vx, vy) 
+        self.n_vector_features = 22 
         
         self.n_grid_features = grid_rows * grid_cols
         self.total_inputs = self.n_vector_features + self.n_grid_features
         
         self.observation_space = Box(
-            low=0.0, high=1.0, 
+            low=-1.0, high=1.0, 
             shape=(self.total_inputs,), 
             dtype=np.float32
         )
+        
+        # Memoria per calcolare la velocità (4 fantasmi, x e y)
+        self.prev_ghosts = np.zeros((4, 2), dtype=np.float32)
+
+    def reset(self, **kwargs):
+        # Reset della memoria quando inizia un nuovo episodio
+        self.prev_ghosts.fill(0.0)
+        return super().reset(**kwargs)
 
     def observation(self, obs):
-        # Safe object retrieval handling OCAtari potential NoneTypes
+        # Supporto sicuro per OCAtari
         objects = []
         if hasattr(self.env, "objects"):
             objects = [o for o in self.env.objects if o is not None]
@@ -43,8 +53,7 @@ class PacmanHybridWrapper(gym.ObservationWrapper):
         vector_input = np.zeros(self.n_vector_features, dtype=np.float32)
         
         # --- 1. PLAYER ---
-        # Pacman is usually "Player"
-        player = next((obj for obj in objects if "Player" in obj.category), None)
+        player = next((obj for obj in objects if "Player" in obj.category or "Pacman" in obj.category), None)
         p_x, p_y = 0.0, 0.0
         
         if player:
@@ -53,31 +62,49 @@ class PacmanHybridWrapper(gym.ObservationWrapper):
             vector_input[0] = p_x
             vector_input[1] = p_y
             
-        # --- 2. GHOSTS (Sorted) ---
-        # Filter ghosts/enemies
+        # --- 2. GHOSTS (Posizione + Velocità) ---
         ghosts = [obj for obj in objects if "Enemy" in obj.category or "Ghost" in obj.category]
-        ghosts.sort(key=lambda x: x.category) # Consistent ordering
+        ghosts.sort(key=lambda x: x.category) # Ordine stabile fondamentale per la velocità
         
         for i in range(min(len(ghosts), 4)):
             g = ghosts[i]
-            g_x = g.x / 160.0
-            g_y = g.y / 210.0
-            idx = 2 + (i * 2)
-            vector_input[idx]   = g_x - p_x # Relative X
-            vector_input[idx+1] = g_y - p_y # Relative Y
+            
+            # Coordinate normalizzate correnti
+            g_x_norm = g.x / 160.0
+            g_y_norm = g.y / 210.0
+            
+            # Indici nel vettore
+            pos_idx = 2 + (i * 2)      # Slot 2, 4, 6, 8
+            vel_idx = 14 + (i * 2)     # Slot 14, 16, 18, 20 (Nuovi)
+            
+            # A. Posizione Relativa
+            vector_input[pos_idx]   = g_x_norm - p_x
+            vector_input[pos_idx+1] = g_y_norm - p_y
+            
+            # B. Velocità (Delta Posizione)
+            # Calcoliamo la differenza rispetto al frame precedente
+            vx = g_x_norm - self.prev_ghosts[i][0]
+            vy = g_y_norm - self.prev_ghosts[i][1]
+            
+            # Amplifichiamo un po' il segnale perché il delta è molto piccolo (0.005)
+            # Moltiplicare per 10 lo rende più "visibile" alla rete
+            vector_input[vel_idx]   = vx * 10.0
+            vector_input[vel_idx+1] = vy * 10.0
+            
+            # Aggiorniamo la memoria per il prossimo step
+            self.prev_ghosts[i][0] = g_x_norm
+            self.prev_ghosts[i][1] = g_y_norm
 
         # --- 3. NEAREST POWER PILL ---
-        power_pills = [obj for obj in objects if "Power" in obj.category] # Usually "PowerPill"
+        power_pills = [obj for obj in objects if "Power" in obj.category or "Ball" in obj.category]
         if player and power_pills:
             nearest = min(power_pills, key=lambda o: (o.x - player.x)**2 + (o.y - player.y)**2)
             vector_input[10] = (nearest.x / 160.0) - p_x
             vector_input[11] = (nearest.y / 210.0) - p_y
 
-        # --- 4. NEAREST PELLET (For Navigation) ---
-        # "Small" or "Pellet" usually
+        # --- 4. NEAREST PELLET (Fallback se visibile) ---
         pellets = [obj for obj in objects if "Pellet" in obj.category or "Small" in obj.category]
         if player and pellets:
-            # Optimization: Don't sort all, just find min
             nearest = min(pellets, key=lambda o: (o.x - player.x)**2 + (o.y - player.y)**2)
             vector_input[12] = (nearest.x / 160.0) - p_x
             vector_input[13] = (nearest.y / 210.0) - p_y
@@ -86,9 +113,7 @@ class PacmanHybridWrapper(gym.ObservationWrapper):
         try:
             rgb_screen = self.env.render()
             if isinstance(rgb_screen, list): rgb_screen = rgb_screen[0]
-            
             gray = cv2.cvtColor(rgb_screen, cv2.COLOR_RGB2GRAY)
-            # Crop typical play area (adjust if needed for specific game version)
             play_area = gray[0:172, :] 
             small_grid = cv2.resize(play_area, (self.grid_cols, self.grid_rows), interpolation=cv2.INTER_AREA)
             grid_input = small_grid.flatten() / 255.0
