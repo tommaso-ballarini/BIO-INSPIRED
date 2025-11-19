@@ -7,3 +7,6 @@ matplotlib
 neat-python  
 graphviz     
 openevolve
+ocatari
+opencv-python
+imageio
