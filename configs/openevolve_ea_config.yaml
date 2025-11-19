@@ -13,7 +13,7 @@ diff_based_evolution: false
 llm:
   models:
     # Usa il tuo modello locale
-    - name: "gemma3:4b"
+    - name: "gemma3:1b"
       weight: 1.0
   
   # Punta al tuo server Ollama
@@ -102,4 +102,4 @@ evaluator:
   
   # AGGIUNGI QUESTO TWEAK:
   # Esegui 8 valutazioni in parallelo
-  parallel_evaluations: 4
+  parallel_evaluations: 2
