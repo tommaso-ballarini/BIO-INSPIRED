@@ -11,7 +11,7 @@ except ImportError:
     # Non stampiamo nulla qui per non sporcare i log se non serve
 
 class PacmanHybridWrapper(gym.ObservationWrapper):
-    def __init__(self, env, grid_rows=8, grid_cols=8):
+    def __init__(self, env, grid_rows=10, grid_cols=10):
         super().__init__(env)
         self.grid_rows = grid_rows
         self.grid_cols = grid_cols
@@ -21,9 +21,9 @@ class PacmanHybridWrapper(gym.ObservationWrapper):
         # 2-9: 4 Ghosts (dx, dy) relative to player
         # 10-11: Nearest PowerPill (dx, dy)
         # 12-13: Nearest Pellet (dx, dy)
-        # --- NUOVI INPUT VELOCITÀ ---
-        # 14-21: 4 Ghosts Velocity (vx, vy) 
-        self.n_vector_features = 22 
+        # 14-17: WALL SENSORS (Up, Right, Down, Left) -> NUOVO
+        # 18-25: 4 Ghosts Velocity (vx, vy) -> SPOSTATO
+        self.n_vector_features = 26 
         
         self.n_grid_features = grid_rows * grid_cols
         self.total_inputs = self.n_vector_features + self.n_grid_features
@@ -42,6 +42,49 @@ class PacmanHybridWrapper(gym.ObservationWrapper):
         self.prev_ghosts.fill(0.0)
         return super().reset(**kwargs)
 
+    def _get_wall_sensors(self, rgb_image, p_x, p_y):
+        """
+        Rileva la presenza di muri (blu) nelle 4 direzioni.
+        Restituisce 4 float (0.0 o 1.0) per [UP, RIGHT, DOWN, LEFT].
+        """
+        sensors = np.zeros(4, dtype=np.float32)
+        if rgb_image is None: 
+            return sensors
+            
+        h, w, _ = rgb_image.shape
+        
+        # Stimiamo il centro di Pacman (la posizione Ocatari è top-left)
+        # Lo sprite è circa 8x14
+        cx = p_x + 4
+        cy = p_y + 7
+        
+        # Distanza di controllo (un po' più in là del raggio del player)
+        dist = 12 
+        
+        # Coordinate di controllo: Up, Right, Down, Left
+        # Attenzione agli assi immagine: y è righe (verticale), x è colonne (orizzontale)
+        check_points = [
+            (cx, cy - dist), # UP
+            (cx + dist, cy), # RIGHT
+            (cx, cy + dist), # DOWN
+            (cx - dist, cy)  # LEFT
+        ]
+        
+        for i, (check_x, check_y) in enumerate(check_points):
+            # Clamp coordinates per non uscire dall'immagine
+            px = int(max(0, min(check_x, w-1)))
+            py = int(max(0, min(check_y, h-1)))
+            
+            pixel = rgb_image[py, px]
+            
+            # Rilevamento Muro: I muri in Pacman sono blu scuro/doppia linea.
+            # Colore tipico: R=33, G=33, B=150+
+            # Criterio: Molto Blu e poco Rosso
+            if pixel[2] > 100 and pixel[0] < 100:
+                sensors[i] = 1.0
+                
+        return sensors
+
     def observation(self, obs):
         # Supporto sicuro per OCAtari
         objects = []
@@ -55,10 +98,13 @@ class PacmanHybridWrapper(gym.ObservationWrapper):
         # --- 1. PLAYER ---
         player = next((obj for obj in objects if "Player" in obj.category or "Pacman" in obj.category), None)
         p_x, p_y = 0.0, 0.0
+        p_x_pix, p_y_pix = 0, 0
         
         if player:
-            p_x = player.x / 160.0
-            p_y = player.y / 210.0
+            p_x_pix = player.x
+            p_y_pix = player.y
+            p_x = p_x_pix / 160.0
+            p_y = p_y_pix / 210.0
             vector_input[0] = p_x
             vector_input[1] = p_y
             
@@ -75,23 +121,20 @@ class PacmanHybridWrapper(gym.ObservationWrapper):
             
             # Indici nel vettore
             pos_idx = 2 + (i * 2)      # Slot 2, 4, 6, 8
-            vel_idx = 14 + (i * 2)     # Slot 14, 16, 18, 20 (Nuovi)
+            vel_idx = 18 + (i * 2)     # Slot 18, 20, 22, 24 (SPOSTATI DOPO I SENSORI)
             
             # A. Posizione Relativa
             vector_input[pos_idx]   = g_x_norm - p_x
             vector_input[pos_idx+1] = g_y_norm - p_y
             
             # B. Velocità (Delta Posizione)
-            # Calcoliamo la differenza rispetto al frame precedente
             vx = g_x_norm - self.prev_ghosts[i][0]
             vy = g_y_norm - self.prev_ghosts[i][1]
             
-            # Amplifichiamo un po' il segnale perché il delta è molto piccolo (0.005)
-            # Moltiplicare per 10 lo rende più "visibile" alla rete
             vector_input[vel_idx]   = vx * 10.0
             vector_input[vel_idx+1] = vy * 10.0
             
-            # Aggiorniamo la memoria per il prossimo step
+            # Aggiorniamo la memoria
             self.prev_ghosts[i][0] = g_x_norm
             self.prev_ghosts[i][1] = g_y_norm
 
@@ -109,14 +152,35 @@ class PacmanHybridWrapper(gym.ObservationWrapper):
             vector_input[12] = (nearest.x / 160.0) - p_x
             vector_input[13] = (nearest.y / 210.0) - p_y
         
-        # --- 5. VISUAL EXTRACTION (Griglia 8x8) ---
+        # --- 5. WALL SENSORS (NUOVO) ---
+        # Estrazione immagine RGB per i sensori
+        rgb_screen = None
         try:
             rgb_screen = self.env.render()
             if isinstance(rgb_screen, list): rgb_screen = rgb_screen[0]
-            gray = cv2.cvtColor(rgb_screen, cv2.COLOR_RGB2GRAY)
-            play_area = gray[0:172, :] 
-            small_grid = cv2.resize(play_area, (self.grid_cols, self.grid_rows), interpolation=cv2.INTER_AREA)
-            grid_input = small_grid.flatten() / 255.0
+        except Exception:
+            pass
+            
+        if player and rgb_screen is not None:
+            sensors = self._get_wall_sensors(rgb_screen, p_x_pix, p_y_pix)
+            vector_input[14:18] = sensors # Slot 14, 15, 16, 17
+        
+        # --- 6. VISUAL EXTRACTION (Migliorata) ---
+        try:
+            if rgb_screen is not None:
+                gray = cv2.cvtColor(rgb_screen, cv2.COLOR_RGB2GRAY)
+                
+                # Crop dell'area di gioco (rimuove HUD punteggio in alto e vite in basso)
+                # Pacman play area: circa da y=20 a y=190
+                play_area = gray[20:190, :] 
+                
+                # Resize alla griglia desiderata (es. 10x10)
+                small_grid = cv2.resize(play_area, (self.grid_cols, self.grid_rows), interpolation=cv2.INTER_AREA)
+                
+                # Normalizzazione
+                grid_input = small_grid.flatten() / 255.0
+            else:
+                grid_input = np.zeros(self.n_grid_features, dtype=np.float32)
         except Exception:
             grid_input = np.zeros(self.n_grid_features, dtype=np.float32)
         

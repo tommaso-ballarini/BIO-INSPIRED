@@ -29,7 +29,7 @@ from utils.neat_plotting_utils import plot_stats, plot_species
 # --- PARAMETRI ---
 ENV_ID = "Pacman" 
 CONFIG_FILE_NAME = "neat_pacman_config.txt"
-NUM_GENERATIONS = 10 
+NUM_GENERATIONS = 20 # Aumentato leggermente per dare tempo all'evoluzione
 MAX_STEPS = 2000
 NUM_WORKERS = max(1, multiprocessing.cpu_count() - 2) 
 
@@ -40,23 +40,18 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 def get_distance_to_powerpill(player, objects):
     """
     Calcola la distanza dalla PowerPill più vicina.
-    Dato che i pellet normali non sono rilevati, questo è l'unico 'faro' di navigazione.
     """
     targets = [o for o in objects if "PowerPill" in o.category]
-    
     if not targets:
-        return None # Tutte le PowerPill mangiate o non presenti
-        
-    # Distanza euclidea minima
+        return None 
     dists = [(t.x - player.x)**2 + (t.y - player.y)**2 for t in targets]
     return math.sqrt(min(dists))
 
 def eval_single_genome(genome, config):
     """
-    Fitness 3.0: Anti-Camping & Aggressive Feeding
+    Fitness 4.0: Exploration + Anti-Camping + Aggressive Feeding
     """
     try:
-        # Usa sempre repeat_action_probability=0 per determinismo
         env = OCAtari(ENV_ID, mode="ram", obs_mode="obj", render_mode="rgb_array")
         if hasattr(env.unwrapped, 'ale'):
             env.unwrapped.ale.setFloat('repeat_action_probability', 0.0)
@@ -64,7 +59,8 @@ def eval_single_genome(genome, config):
         print(f"Env Error: {e}")
         return 0.0
 
-    env = PacmanHybridWrapper(env)
+    # Usa il wrapper aggiornato (che deve essere salvato in core/wrappers.py)
+    env = PacmanHybridWrapper(env, grid_rows=10, grid_cols=10)
     net = neat.nn.FeedForwardNetwork.create(genome, config)
     
     observation, info = env.reset()
@@ -73,8 +69,10 @@ def eval_single_genome(genome, config):
     fitness = 0.0
     
     # Variabili per "Starvation" (Fame)
-    steps_without_food = 0
-    last_score = 0
+    steps_without_significant_progress = 0
+    
+    # Logica Esplorazione
+    visited_sectors = set()
     
     while not done and steps < MAX_STEPS:
         output = net.activate(observation)
@@ -85,28 +83,49 @@ def eval_single_genome(genome, config):
         except Exception:
             break 
             
-        # --- NUOVA LOGICA FITNESS ---
+        # --- ESTRAZIONE POSIZIONE DAL VETTORE (Primi 2 valori) ---
+        # Il wrapper mette p_x in [0] e p_y in [1] (normalizzati 0.0-1.0)
+        p_x = observation[0]
+        p_y = observation[1]
         
-        # 1. SOPRAVVIVENZA (Molto ridotta)
-        # Diamo pochissimo per il semplice esistere, per evitare loop infiniti
+        # Calcolo settore (Griglia virtuale 20x20 per mappare l'esplorazione)
+        # 20x20 è abbastanza fine da premiare il movimento tra stanze diverse
+        sector_x = int(p_x * 20)
+        sector_y = int(p_y * 20)
+        current_sector = (sector_x, sector_y)
+        
+        # --- CALCOLO FITNESS ---
+        
+        # 1. SOPRAVVIVENZA BASICA
         fitness += 0.1 
         
-        # 2. SCORE (Il vero obiettivo)
-        # Se fa punti, resettiamo il contatore della fame e diamo un grosso premio
+        explored_new_area = False
+        
+        # 2. PREMIO ESPLORAZIONE (Fondamentale se non vede i pellet)
+        if current_sector not in visited_sectors:
+            visited_sectors.add(current_sector)
+            fitness += 5.0 # Bonus consistente per aver scoperto una nuova zona
+            explored_new_area = True
+        
+        # 3. SCORE (Il vero obiettivo)
         if reward > 0:
-            fitness += reward * 10.0  # 1 pallina (10pt) = +100 fitness
-            steps_without_food = 0
+            # Aumentiamo il peso del cibo reale per distinguerlo dall'esplorazione
+            fitness += reward * 20.0  
+            steps_without_significant_progress = 0
+        elif explored_new_area:
+            # Se ha esplorato, resettiamo il timer della fame anche se non ha mangiato
+            steps_without_significant_progress = 0
         else:
-            steps_without_food += 1
+            # Se non mangia E non esplora, la fame sale
+            steps_without_significant_progress += 1
             
-        # 3. STARVATION (Meccanismo anti-camping)
-        # Se non mangia per 200 frame (circa 4 secondi), penalità e chiudiamo l'episodio
-        if steps_without_food > 200:
-            fitness -= 20.0 # Punizione per pigrizia
-            done = True # Uccidiamo l'agente inutile
+        # 4. STARVATION / ANTI-CAMPING
+        # Se non fa nulla di utile (mangiare o esplorare) per 200 frame, muore.
+        if steps_without_significant_progress > 200:
+            fitness -= 10.0 # Punizione
+            done = True 
         
         steps += 1
-        # Aggiorniamo done
         done = done or terminated or truncated
         
     env.close()
@@ -120,7 +139,7 @@ if __name__ == "__main__":
         pass
 
     print("=" * 70)
-    print(f"🧬 AVVIO PACMAN NEAT (SURVIVAL + SCORE FOCUS)")
+    print(f"🧬 AVVIO PACMAN NEAT (EXPLORATION v4 + WALL SENSORS)")
     print("=" * 70)
     
     config = neat.Config(
@@ -128,6 +147,9 @@ if __name__ == "__main__":
         neat.DefaultSpeciesSet, neat.DefaultStagnation,
         CONFIG_PATH
     )
+    
+    # Nota: Assicurati che CONFIG_PATH (neat_pacman_config.txt) abbia num_inputs aggiornato!
+    # Con le modifiche al wrapper, num_inputs dovrebbe essere circa 126.
     
     pe = neat.ParallelEvaluator(NUM_WORKERS, eval_single_genome)
     
