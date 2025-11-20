@@ -5,112 +5,135 @@ import json
 import shutil
 import time
 import csv
+import gymnasium as gym
+import numpy as np
 from pathlib import Path
-
-# --- Aggiungi il root del progetto al PYTHONPATH ---
-script_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.abspath(os.path.join(script_dir, '..'))
-if project_root not in sys.path:
-    sys.path.append(project_root)
-# ---
-
-try:
-    from core.evaluator import run_game_simulation
-    from openevolve.evaluation_result import EvaluationResult
-except ImportError:
-    # Fallback silenzioso o print su stderr per non rompere il parsing JSON del genitore
-    sys.stderr.write("Errore: Impossibile importare i moduli da /core o openevolve.\n")
-    sys.exit(1)
 
 # --- Configurazione ---
 ENV_NAME = 'Freeway-v4'
 MAX_STEPS_PER_GAME = 1500
 NUM_GAMES_PER_EVAL = 3
 
-# Cartelle per Checkpoint e Storia
+# Punteggi
+REWARD_FACTOR = 10.0      # Punti per ogni attraversamento riuscito
+COLLISION_PENALTY = 2.0   # Punti persi per ogni collisione
+
+# Setup Percorsi
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(script_dir, '..'))
 HISTORY_DIR = Path(project_root) / 'evolution_history'
 HISTORY_CSV = HISTORY_DIR / 'fitness_history.csv'
 HISTORY_DIR.mkdir(parents=True, exist_ok=True)
 
-# Inizializza CSV se non esiste
+# Inizializza CSV
 if not HISTORY_CSV.exists():
     with open(HISTORY_CSV, 'w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(["timestamp", "score", "filename"])
+        csv.writer(f).writerow(["timestamp", "score", "collisions", "filename"])
 
-def save_checkpoint(program_path, score):
-    """Salva una copia del codice generato per analisi futura."""
+# Fix per Gym/Atari
+try:
+    import ale_py
+    gym.register_envs(ale_py)
+except ImportError:
+    pass
+
+def save_checkpoint(program_path, score, collisions):
     timestamp = int(time.time() * 1000)
-    # Nome file: attempt_TIMESTAMP_SCORE.py (così li ordiniamo facilmente e vediamo subito la qualità)
     dest_name = f"attempt_{timestamp}_score_{score:.1f}.py"
     dest_path = HISTORY_DIR / dest_name
-    
     try:
         shutil.copy(program_path, dest_path)
-        
-        # Aggiorna il CSV
         with open(HISTORY_CSV, 'a', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow([timestamp, score, dest_name])
+            csv.writer(f).writerow([timestamp, score, collisions, dest_name])
+    except Exception:
+        pass
+
+def run_custom_simulation(agent_func):
+    """Esegue il gioco e conta le collisioni guardando la RAM."""
+    try:
+        env = gym.make(ENV_NAME, obs_type='ram')
+    except:
+        env = gym.make('ALE/Freeway-v5', obs_type='ram')
+
+    observation, _ = env.reset()
+    total_reward = 0
+    collisions = 0
+    prev_y = 0
+    
+    # Inizializziamo prev_y
+    prev_y = observation[14] # Byte 14 è la Y in Freeway
+
+    for _ in range(MAX_STEPS_PER_GAME):
+        action = agent_func(observation)
+        observation, reward, terminated, truncated, _ = env.step(action)
+        
+        curr_y = observation[14]
+        
+        # Rilevamento Collisione:
+        # Se la Y diminuisce bruscamente, siamo stati respinti da un'auto
+        # (O l'agente ha premuto GIÙ, ma penalizziamo comunque il tornare indietro)
+        if curr_y < prev_y:
+            collisions += 1
+        
+        prev_y = curr_y
+        total_reward += reward
+        
+        if terminated or truncated:
+            break
             
-    except Exception as e:
-        sys.stderr.write(f"Errore salvataggio checkpoint: {e}\n")
+    env.close()
+    return total_reward, collisions
 
 def evaluate(program_path: str):
-    final_score = -1000.0
-    correctness = 0.0
-    error_log = None
-
     try:
-        # 1. Importa dinamicamente
+        # Import dinamico
         spec = importlib.util.spec_from_file_location("evolved_agent", program_path)
         agent_module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(agent_module)
+        agent_func = agent_module.get_action
         
-        agent_decision_function = agent_module.get_action
+        avg_fitness = 0.0
+        avg_collisions = 0.0
         
-        # 2. Esegui simulazione
-        total_fitness = 0.0
+        # Loop di valutazione multipla
         for _ in range(NUM_GAMES_PER_EVAL):
-            fitness, metrics = run_game_simulation(
-                agent_decision_function=agent_decision_function,
-                env_name=ENV_NAME,
-                max_steps=MAX_STEPS_PER_GAME,
-                obs_type="ram"
-            )
-            total_fitness += fitness
-        
-        final_score = total_fitness / NUM_GAMES_PER_EVAL
-        correctness = 1.0
+            game_reward, n_collisions = run_custom_simulation(agent_func)
+            
+            # Calcolo Fitness Personalizzata
+            # Es: 2 attraversamenti (2.0) e 10 collisioni
+            # Score = (2.0 * 10) - (10 * 1) = 10.0
+            fitness = (game_reward * REWARD_FACTOR) - (n_collisions * COLLISION_PENALTY)
+            
+            avg_fitness += fitness
+            avg_collisions += n_collisions
+            
+        final_score = avg_fitness / NUM_GAMES_PER_EVAL
+        final_collisions = avg_collisions / NUM_GAMES_PER_EVAL
 
-        # Salva checkpoint del successo
-        save_checkpoint(program_path, final_score)
+        save_checkpoint(program_path, final_score, final_collisions)
 
+        # Output per OpenEvolve (formato JSON obbligatorio)
+        from openevolve.evaluation_result import EvaluationResult
         return EvaluationResult(
             metrics={
                 "combined_score": final_score, 
                 "score": final_score,
+                "collisions": final_collisions,
                 "correctness": 1.0
             }
         )
         
     except Exception as e:
-        # Salva checkpoint anche del fallimento (utile per debuggare errori di sintassi gemma)
-        save_checkpoint(program_path, -1000.0)
-        
+        # Gestione errori (codice rotto dall'LLM)
+        save_checkpoint(program_path, -1000.0, 0)
+        from openevolve.evaluation_result import EvaluationResult
         return EvaluationResult(
-            metrics={
-                "combined_score": -1000.0,
-                "score": -1000.0, 
-                "correctness": 0.0
-            },
+            metrics={"combined_score": -1000.0, "score": -1000.0, "correctness": 0.0},
             artifacts={"stderr": str(e)}
         )
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
-        program_path = sys.argv[1]
-        result = evaluate(program_path)
-        print(json.dumps(result.to_dict()))
+        print(json.dumps(evaluate(sys.argv[1]).to_dict()))
     else:
         sys.exit(1)
