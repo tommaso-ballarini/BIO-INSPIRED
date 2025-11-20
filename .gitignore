@@ -4,6 +4,7 @@ __pycache__/
 
 # Ignora la cartella degli output generati
 evolution_results/
+evolution_history
 
 # Ignora file di output sparsi (come da tua immagine)
 best_solution_*.json
