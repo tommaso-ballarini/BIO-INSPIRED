@@ -1,5 +1,5 @@
 # --- Impostazioni Generali ---
-max_iterations: 5  # AUMENTATO: Con un modello piccolo servono molti tentativi
+max_iterations: 20  # AUMENTATO: Con un modello piccolo servono molti tentativi
 random_seed: 42
 log_level: "INFO"
 
@@ -52,7 +52,7 @@ prompt:
 
 # --- Configurazione Database (MAP-Elites) ---
 database:
-  population_size: 10  # Ridotto leggermente per velocità di gestione
+  population_size: 50  # Ridotto leggermente per velocità di gestione
   num_islands: 1       # Ridotto a 1: meglio un'unica evoluzione concentrata che 2 disperse
   
   feature_dimensions:

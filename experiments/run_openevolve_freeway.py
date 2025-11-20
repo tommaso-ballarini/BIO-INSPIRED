@@ -11,7 +11,7 @@ project_root = pathlib.Path(__file__).parent.parent.resolve()
 initial_program_path = project_root / 'openevolve_experiments' / 'initial_agent.py' 
 evaluator_path = project_root / 'openevolve_experiments' / 'evaluate_agent.py' 
 config_path = project_root / 'configs' / 'openevolve_ea_config.yaml'
-output_dir = project_root / 'evolution_results' / 'openevolve_ea_test_gemma3_1b'
+output_dir = project_root / 'evolution_results' / 'openevolve_ea_test_gemma3_4b'
 history_csv = project_root / 'evolution_history' / 'fitness_history.csv'
 
 def setup_paths():
