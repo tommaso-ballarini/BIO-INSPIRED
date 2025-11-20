@@ -11,7 +11,7 @@ fitness_threshold     = 15000.0
 # Numero di individui per generazione
 # Alza: più diversità, esplorazione migliore, ma molto più lento
 # Abbassa: più veloce ma meno esplorazione, rischio di convergenza prematura
-pop_size              = 300
+pop_size              = 250
 
 # Cambiato: evita reset completi
 reset_on_extinction   = False 
@@ -22,12 +22,12 @@ single_structural_mutation = false
 structural_mutation_surer = default
 # === Input/Output ===
 num_inputs              = 128
-num_outputs             = 9
+num_outputs             = 5
 
 # Neuroni nascosti iniziali (era = 0)
 # Alza (5-10): la rete parte più complessa, può apprendere pattern complessi subito
 # Rischio: troppi neuroni rallentano l'evoluzione e causano overfitting
-num_hidden              = 2
+num_hidden              = 6
 
 # === Attivazione ===
 activation_default      = tanh
@@ -60,7 +60,7 @@ compatibility_weight_coefficient   = 0.6
 #Alza conn_add_prob (0.4-0.5): crescita più rapida, reti più complesse
 #Abbassa conn_delete_prob (0.05): mantiene più struttura
 #Bilanciamento: conn_add > conn_delete per crescita netta
-conn_add_prob           = 0.4
+conn_add_prob           = 0.5
 conn_delete_prob        = 0.08
 
 enabled_default         = True
@@ -75,7 +75,7 @@ feed_forward            = False
 # 'full_direct': Ogni input connesso direttamente a ogni output all'inizio
 # "partial_direct 0.5": solo 50% delle connessioni iniziali (rete più semplice)
 # "full_nodirect": nessuna connessione iniziale (parte da zero, molto lento)
-initial_connection      = partial_direct 0.1
+initial_connection      = partial_direct 0.2
 
 # === Nodi ===
 
@@ -105,7 +105,7 @@ weight_max_value        = 30.0
 weight_min_value        = -30.0
 
 # Intensità della modifica dei pesi
-weight_mutate_power     = 0.05
+weight_mutate_power     = 0.5
 
 # Probabilità che un peso venga modificato
 weight_mutate_rate      = 0.75
@@ -117,7 +117,7 @@ weight_replace_rate     = 0.12
 #Abbassa (2.0-2.5): più specie, più diversità, protegge innovazioni
 #Alza (4.0-5.0): meno specie, convergenza più rapida
 #Ms. Pac-Man: abbassa a 2.5 per proteggere diverse strategie (aggressiva vs difensiva)
-compatibility_threshold = 3.5
+compatibility_threshold = 3.3
 
 [DefaultStagnation]
 species_fitness_func = max
@@ -127,7 +127,7 @@ species_fitness_func = max
 #Alza (20-25): dà più tempo alle strategie lente a maturare
 #Abbassa (10): elimina velocemente strategie non promettenti
 #Consiglio: alza se hai poche generazioni totali
-max_stagnation       = 15
+max_stagnation       = 10
 
 #Cosa fa: Migliori individui di ogni specie passano automaticamente
 #Per migliorare:

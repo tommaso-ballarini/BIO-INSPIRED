@@ -21,7 +21,7 @@ from utils.neat_plotting_utils import plot_stats, plot_species, draw_net
 # --- 0. Parametri dell'Esperimento ---
 ENV_NAME = "ALE/MsPacman-v5"
 CONFIG_FILE_NAME = "neat_pacman_config.txt"
-NUM_GENERATIONS = 120
+NUM_GENERATIONS = 50
 MAX_STEPS = 10000
 
 root_dir = project_root
@@ -45,8 +45,12 @@ def agent_decision_function_neat(game_state):
     # Attiva il network
     output = current_net.activate(features)
     
-    # Restituisci l'azione migliore
-    return np.argmax(output)
+    action_idx = np.argmax(output)
+
+    # Mappatura NEAT → ALE
+    ACTIONS = [0, 4, 3, 2, 5]
+
+    return ACTIONS[action_idx]
 
 
 def eval_genomes(genomes, config):
@@ -68,7 +72,8 @@ def eval_genomes(genomes, config):
     for i, (genome_id, genome) in enumerate(genomes):
         try:
             # 1. Crea il network
-            current_net = neat.nn.FeedForwardNetwork.create(genome, config)
+            #current_net = neat.nn.FeedForwardNetwork.create(genome, config)
+            current_net = neat.nn.RecurrentNetwork.create(genome, config)
             
             # 2. Esegui la simulazione
             fitness, metrics = run_game_simulation(
@@ -76,7 +81,7 @@ def eval_genomes(genomes, config):
                 env_name=ENV_NAME,
                 max_steps=MAX_STEPS,
                 obs_type="ram",
-                frameskip=4, # DETERMINISTICA: un numero intero tipo 4, L'azione viene ripetuta 4 volte ad ogni step. (Questo è il default per ALE/MsPacman-v5). STOCASTICO:Una tupla di interi, e.g., (2, 5), NESSUNO SKIP: 1
+                frameskip=2, # DETERMINISTICA: un numero intero tipo 4, L'azione viene ripetuta 4 volte ad ogni step. (Questo è il default per ALE/MsPacman-v5). STOCASTICO:Una tupla di interi, e.g., (2, 5), NESSUNO SKIP: 1
                 repeat_action_probability=0.0                   ### CAMBIA PER REGOLARE DIFFICOLTà: 0.5 difficile, 0.25 default, 0 facile deterministico
             )
             
