@@ -1,98 +1,64 @@
 # --- Impostazioni Generali ---
-max_iterations: 20  # Iniziamo con 20 per un test rapido
+max_iterations: 5  # AUMENTATO: Con un modello piccolo servono molti tentativi
 random_seed: 42
 log_level: "INFO"
 
 # --- Impostazioni di Evoluzione ---
-# SOLUZIONE PER IL CRASH "No valid diffs":
-# Messo al livello root (come da default_config) e impostato a 'false' 
-# per dire all'LLM di restituire il file completo.
 diff_based_evolution: false
 
 # --- Configurazione LLM ---
 llm:
   models:
-    # Usa il tuo modello locale
-    - name: "gemma3:1b"
+    - name: "gemma3:4b"
       weight: 1.0
   
-  # Punta al tuo server Ollama
   api_base: "http://localhost:11434/v1"
-  api_key: "ollama"  # (O 'none', Ollama non lo richiede)
+  api_key: "ollama"
   
+  # MODIFICATO: 0.8 riduce gli errori di sintassi (il 1b ne fa tanti)
+  # pur mantenendo un po' di creatività.
   temperature: 1
   timeout: 500
-  retries: 2
+  retries: 3
 
-# --- Configurazione Prompt ---
-# --- Configurazione Prompt ---
 prompt:
-  # Il tuo system_message personalizzato è la chiave
   system_message: |
-    You are an expert Artificial Intelligence and Reinforcement Learning engineer,
-    specialized in optimizing agents for Atari games.
-  
-    # OBJECTIVE
-    Your task is to evolve a Python agent to play the Atari game "Freeway-v4".
-    Your goal is to maximize the score
-
-    # AGENT CONTEXT
-    You will receive a Python file defining a single function:
-    `def get_action(observation):`
-
-    - `observation`: This is a 128-byte NumPy array, representing the game's RAM.
-    - `return value`: Your function MUST return a single integer:
-        - 0: NOOP (do nothing)
-        - 1: UP (move up)
-        - 2: DOWN (move down)
-
-    # MUTATION TASK
-    The initial agent you are given is very simple (it chooses a random action).
-    Your mutations must make the agent smarter.
-
-    # ALLOWED STRATEGIES
-    # Your task is to discover the LOGIC for playing the game.
-    - You MUST analyze the `observation` array to find relevant bytes.
-    - You MUST use `if/elif/else` logic based on RAM byte values.
+    You are a Python coding assistant optimizing an agent for the Atari game "Freeway".
     
-    # ADVANCED HINTS FOR LOGIC:
-    # - Try to create "heuristic variables" from the RAM, for example:
-    #   chicken_y = observation[50] # (Note: 50 is just an example, you must find the correct byte)
-    #   car_in_lane_1 = observation[17]
-    #
-    # - Try to build a "danger function" or a "decision tree", for example:
-    #   if chicken_y > 100 and chicken_y < 120:
-    #       # Now check for cars
-    #       if observation[18] > chicken_y:
-    #           return 1 # Move UP
-    #
-    # - You may use global variables to maintain a simple "state" or "memory"
-    #   (e.g., to remember the last move), but simple reactive logic is preferred.
-
-    # CRITICAL RULES
-    1. The file MUST contain the function `def get_action(observation):`.
-    2. You cannot import external libraries other than `numpy`.
-    3. The evolution is blind; make small, targeted mutations.
-    4. Return only the complete Python code.
-  
+    # TASK
+    The function `get_action(observation)` controls a chicken trying to cross the road.
+    Your goal is to add collision avoidance logic.
     
-  # Includi gli errori (stderr) nei prompt futuri
+    # KEY RAM INFO (Use this!)
+    - `observation[14]`: Contains the Chicken's Y position (0 to ~180).
+    - `observation[108]`, `observation[109]`, ... : Contain car positions.
+    
+    # STRATEGY TO IMPLEMENT
+    1. Check the chicken's position (`observation[14]`).
+    2. Check nearby bytes for cars (explore indices 20 to 30 or 100 to 120).
+    3. If a value in RAM changes quickly, it might be a car!
+    4. If dangerous -> return 0 (Wait).
+    5. Else -> return 1 (UP).
+    
+    # CRITICAL RULE
+    You MUST change the code. Do not return the same code.
+    Use an `if` statement based on `observation`.
+
   include_artifacts: true
-
+  
+  # Diamo al modello meno esempi per non confonderlo
   num_top_programs: 1
-  num_diverse_programs: 2
+  num_diverse_programs: 1
 
 # --- Configurazione Database (MAP-Elites) ---
 database:
-  population_size: 100  # Riduciamo per un test rapido (default è 1000)
-  num_islands: 2       # Riduciamo per un test rapido (default è 5)
+  population_size: 10  # Ridotto leggermente per velocità di gestione
+  num_islands: 1       # Ridotto a 1: meglio un'unica evoluzione concentrata che 2 disperse
   
-  # Usiamo 'score' (dal tuo valutatore) e 'complexity' (integrato)
-  # come assi per la diversità
   feature_dimensions:
     - "complexity"
     - "score"
-  feature_bins: 10
+  feature_bins: 5      # Ridotto i bin: mappa più semplice da riempire
 
 # --- Configurazione Valutatore ---
 evaluator:
@@ -100,6 +66,5 @@ evaluator:
   cascade_evaluation: false
   use_llm_feedback: false
   
-  # AGGIUNGI QUESTO TWEAK:
-  # Esegui 8 valutazioni in parallelo
+  # Mantieni 2 se il PC è lento, massimo 4 se hai una CPU decente (Ryzen 5/i5 o sup)
   parallel_evaluations: 2
