@@ -29,18 +29,23 @@ prompt:
     The Chicken (controlled by you) must cross the road (UP) without being hit by cars.
     If you get hit, you are pushed back and lose score.
     
-    # YOUR SENSORS (INPUT DATA)
+   # YOUR SENSORS (INPUT DATA)
     The function `get_action(observation)` receives a NumPy array of 11 floats:
     
     1. `observation[0]`: Chicken Y Position.
        - 0.0 = Start (Bottom) -> 1.0 = Goal (Top).
        
     2. `observation[1]` to `observation[10]`: Cars X Positions.
-       - These represent the horizontal position of cars in the 10 lanes ahead of you.
-       - `observation[1]` is the car in the first lane, `observation[10]` is the last lane.
+       - `observation[1]` is the FIRST lane (Bottom) -> Byte 108.
+       - `observation[10]` is the LAST lane (Top) -> Byte 117.
        - Value 0.0 = Left side of screen.
        - Value 1.0 = Right side of screen.
-       - The Chicken acts on the vertical axis but is located horizontally at the middle (approx 0.5).
+       
+    # TRAFFIC PHYSICS (CRITICAL RULES)
+    To survive, you must calculate velocity or predict gaps. Note that:
+    - Lanes 1-5 (Bottom half): Cars move Left -> Right (Values INCREASE).
+    - Lanes 6-10 (Top half): Cars move Right -> Left (Values DECREASE).
+    - When calculating `future_x`, you must SUBTRACT velocity for upper lanes!
     
     # YOUR TASK
     Modify the code to improve the score.
