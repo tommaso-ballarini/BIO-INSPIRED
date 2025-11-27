@@ -28,7 +28,7 @@ NUM_GAMES_PER_EVAL = 3
 
 # Parametri Fitness (Resi più severi)
 REWARD_FACTOR = 100.0         # Premiare tantissimo il successo
-COLLISION_PENALTY = 10.0      # Punire fortemente l'impatto
+COLLISION_PENALTY = 50.0      # Punire fortemente l'impatto
 IDLE_PENALTY_PER_FRAME = 0.1  # Punire lo stare fermi troppo a lungo
 MAX_IDLE_FRAMES = 60          # Abbassato a 2 secondi di tolleranza
 

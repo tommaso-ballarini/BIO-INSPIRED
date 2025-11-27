@@ -17,46 +17,42 @@ llm:
   
   # MODIFICATO: 0.8 riduce gli errori di sintassi (il 1b ne fa tanti)
   # pur mantenendo un po' di creatività.
-  temperature: 1
+  temperature: 0.8
   timeout: 500
   retries: 3
 
 prompt:
   system_message: |
-    You are a Python coding assistant evolving an agent for the Atari game "Freeway".
+    You are an EVOLUTIONARY MUTATION ENGINE. Your goal is to MUTATE Python code for an Atari agent.
     
-    # THE GOAL
-    The Chicken (controlled by you) must cross the road (UP) without being hit by cars.
-    If you get hit, you are pushed back and lose score.
+    # THE INPUT
+    You will receive the code of an existing agent (function get_action).
     
-   # YOUR SENSORS (INPUT DATA)
-    The function `get_action(observation)` receives a NumPy array of 11 floats:
+    # YOUR MISSION
+    You MUST change the logic. DO NOT return the same code.
+    The current agent is too simple. You MUST introduce NEW BEHAVIOR.
     
-    1. `observation[0]`: Chicken Y Position.
-       - 0.0 = Start (Bottom) -> 1.0 = Goal (Top).
-       
-    2. `observation[1]` to `observation[10]`: Cars X Positions.
-       - `observation[1]` is the FIRST lane (Bottom) -> Byte 108.
-       - `observation[10]` is the LAST lane (Top) -> Byte 117.
-       - Value 0.0 = Left side of screen.
-       - Value 1.0 = Right side of screen.
-       
-    # TRAFFIC PHYSICS (CRITICAL RULES)
-    To survive, you must calculate velocity or predict gaps. Note that:
-    - Lanes 1-5 (Bottom half): Cars move Left -> Right (Values INCREASE).
-    - Lanes 6-10 (Top half): Cars move Right -> Left (Values DECREASE).
-    - When calculating `future_x`, you must SUBTRACT velocity for upper lanes!
+    # SENSORS (REMINDER)
+    - obs[0]: Chicken Y (0.0=Bottom, 1.0=Top)
+    - obs[1-10]: Car Lanes. obs[1]=Bottom Lane. obs[10]=Top Lane.
+    - Lanes 1-5 move Left->Right (Value Increases).
+    - Lanes 6-10 move Right->Left (Value Decreases).
     
-    # YOUR TASK
-    Modify the code to improve the score.
-    The current agent blindly runs into cars. You must introduce logic to:
-    1. Read the sensor data.
-    2. Decide when it is safe to move UP (return 1).
-    3. Decide when to WAIT (return 0) to avoid collisions.
+    # MUTATION STRATEGIES (PICK ONE)
+    1. If a car is close, wait 
+    2. CHANGE THRESHOLDS: Change the distance checking (e.g. from < 0.2 to < 0.3).
+    3. CHANGE OUTPUT: Change the action chosen (e.g. from 1 = run to 0 = wait and viceversa).
+
     
-    # RULES
-    - Do NOT import external libraries (numpy is available).
-    - Return ONLY integer 0 or 1.
+    # CRITICAL RULES
+    - *CRITICAL*: You MUST modify the get_action function.
+    - *CRITICAL*: Do NOT just add comments. CHANGE THE CODE LOGIC.
+    - Return ONLY the executable Python code.
+    - Do NOT import external libraries.
+    
+  include_artifacts: true
+  num_top_programs: 1
+  num_diverse_programs: 2  # più varianti diverse allo stesso prompt
     
   include_artifacts: true
   num_top_programs: 1
