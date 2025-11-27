@@ -189,74 +189,50 @@ class PacmanHybridWrapper(gym.ObservationWrapper):
 
 class FreewayOCAtariWrapper(gym.ObservationWrapper):
     """
-    NUOVO Wrapper per Freeway che usa OCAtari.
-    Estrae: [Chicken_Y, Car_Lane_1_X, Car_Lane_2_X, ...]
+    Wrapper che simula l'output di OCAtari leggendo direttamente la RAM.
+    Output: Array di 11 float [Pollo_Y, Auto1_X, Auto2_X, ..., Auto10_X]
     """
-    def __init__(self, env_name="Freeway-v4"):
-        if not OCATARI_AVAILABLE:
-            raise ImportError("Per usare questo wrapper devi installare OCAtari: pip install ocatari")
+    def __init__(self, env):
+        # Prendiamo l'env esistente, non ne creiamo uno nuovo!
+        super().__init__(env)
         
-        # Creiamo l'ambiente OCAtari internamente
-        self.ocatari_env = OCAtari(env_name, mode="ram", hud=False, render_mode="rgb_array")
-        self.ocatari_env.reset()
-        
-        # Chiamiamo il costruttore del padre passando l'env wrappato
-        super().__init__(self.ocatari_env)
-        
-        # Definizione dello spazio di osservazione:
-        # 1 (Pollo Y) + 10 (Corsie Auto X) = 11 features
         self.num_lanes = 10
-        self.observation_space = Box(
+        # 11 features: 1 per il pollo (Y), 10 per le auto (X)
+        self.observation_space = gym.spaces.Box(
             low=0.0, high=1.0, 
             shape=(1 + self.num_lanes,), 
             dtype=np.float32
         )
-        
-        # Costanti per normalizzazione (Standard Atari)
-        self.SCREEN_H = 210.0
-        self.SCREEN_W = 160.0
 
     def observation(self, obs):
-        # OCAtari popola automaticamente self.ocatari_env.objects
-        objects = self.ocatari_env.objects
+        """
+        Trasforma i 128 byte della RAM in 11 feature pulite.
+        """
+        # obs qui è la RAM (array di 128 interi)
         
-        state_vector = np.zeros(1 + self.num_lanes, dtype=np.float32)
+        state_vector = np.zeros(11, dtype=np.float32)
         
-        chicken = None
-        cars = []
-
-        # Filtriamo gli oggetti
-        for obj in objects:
-            name = obj.category.lower()
-            if "chicken" in name:
-                chicken = obj
-            elif "car" in name or "enemy" in name:
-                cars.append(obj)
+        # --- 1. POLLO (Byte 14) ---
+        # Valore RAM: ~175 (basso/start) a ~15 (alto/goal)
+        chicken_ram_y = obs[14]
+        # Normalizziamo: 0.0 = Start, 1.0 = Goal
+        # Usiamo 170.0 e 18.0 come range approssimativo sicuro
+        y_norm = (170.0 - chicken_ram_y) / (170.0 - 18.0)
+        state_vector[0] = np.clip(y_norm, 0.0, 1.0)
         
-        # 1. Pollo Y (Normalizzato e Invertito: 0=Start, 1=Goal)
-        if chicken:
-            # Y in Atari va dall'alto (0) al basso (210).
-            # In Freeway: Start è in basso (~175), Goal è in alto (~15).
-            # Vogliamo che "progresso" vada da 0.0 a 1.0 man mano che sale.
-            y_norm = (175.0 - chicken.y) / (175.0 - 15.0)
-            state_vector[0] = np.clip(y_norm, 0.0, 1.0)
+        # --- 2. AUTO (Byte 108 - 117) ---
+        # In Freeway, i byte da 108 a 117 contengono la X delle auto nelle 10 corsie.
+        # Valore RAM: 0 a 160 (circa)
+        car_bytes = [108, 109, 110, 111, 112, 113, 114, 115, 116, 117]
         
-        # 2. Auto (Ordinate per Y decrescente -> dalla corsia in basso a quella in alto)
-        cars.sort(key=lambda c: c.y, reverse=True)
-        
-        # Prendiamo fino a 10 auto
-        for i in range(min(len(cars), self.num_lanes)):
-            car = cars[i]
-            # Normalizziamo la X (0.0 sinistra - 1.0 destra)
-            state_vector[1 + i] = car.x / self.SCREEN_W
-            
+        # Invertiamo l'ordine perché visivamente la corsia 1 è in basso
+        # ma in memoria spesso l'ordine è inverso. Questo ordine funziona bene.
+        for i, byte_idx in enumerate(car_bytes):
+            if byte_idx < len(obs):
+                car_x = obs[byte_idx]
+                # Normalizziamo X tra 0.0 e 1.0
+                state_vector[1 + i] = car_x / 160.0
+            else:
+                state_vector[1 + i] = 0.0 # Valore safe se la RAM è strana
+                
         return state_vector
-
-    def step(self, action):
-        # Importante: chiamiamo step su ocatari_env per aggiornare gli oggetti
-        obs, reward, truncated, terminated, info = self.ocatari_env.step(action)
-        return self.observation(obs), reward, truncated, terminated, info
-
-    def reset(self, **kwargs):
-        obs, info = self.ocatari_env.reset(**kwargs)
-        return self.observation(obs), info

@@ -11,8 +11,8 @@ project_root = pathlib.Path(__file__).parent.parent.resolve()
 initial_program_path = project_root / 'openevolve_experiments' / 'initial_agent.py' 
 evaluator_path = project_root / 'openevolve_experiments' / 'evaluate_agent.py' 
 config_path = project_root / 'configs' / 'openevolve_ea_config.yaml'
-output_dir = project_root / 'evolution_results' / 'openevolve_ea_test_gemma3_4b'
-history_csv = project_root / 'evolution_history' / 'fitness_history.csv'
+output_dir = project_root / 'evolution_results' / 'openevolve_ea_test_gemma3_4b' 
+history_csv = project_root / 'evolution_history' / 'fitness_history.csv' 
 
 def setup_paths():
     if str(project_root) not in sys.path:
@@ -25,9 +25,9 @@ def check_files():
         assert config_path.exists(), f"Manca: {config_path}"
         os.makedirs(output_dir, exist_ok=True)
         
-        # Pulizia opzionale della history precedente per nuovi run puliti
-        # if history_csv.exists():
-        #     os.remove(history_csv)
+        #Pulizia opzionale della history precedente per nuovi run puliti
+        if history_csv.exists():
+            os.remove(history_csv)
             
         return True
     except AssertionError as e:
@@ -47,17 +47,37 @@ def plot_results():
             print("Il file CSV è vuoto.")
             return
 
-        # Filtriamo i -1000 (errori di sintassi/runtime) per il grafico principale
-        valid_runs = df[df['score'] > -900].reset_index()
-        
         plt.figure(figsize=(10, 6))
-        
-        # Plot di TUTTI i tentativi (in rosso gli errori, in blu i validi)
-        plt.scatter(df.index, df['score'], c='red', label='Errori / Crash', alpha=0.3, s=10)
-        plt.scatter(valid_runs['index'], valid_runs['score'], c='blue', label='Esecuzioni Valide', alpha=0.7)
-        
-        # Linea del miglior punteggio progressivo
+
+        # --- NUOVO: separiamo davvero crash vs esecuzioni valide ---
+        # Crash / errori: score esattamente -1000 (come messo in evaluate_agent.py)
+        error_runs = df[df['score'] <= -999.9]
+        # Tutto il resto è considerato "valido" (anche se il punteggio è molto basso)
+        valid_runs = df[df['score'] > -999.9].reset_index()
+
+        # Errori / crash in rosso
+        if not error_runs.empty:
+            plt.scatter(
+                error_runs.index,
+                error_runs['score'],
+                c='red',
+                label='Errori / Crash',
+                alpha=0.3,
+                s=10
+            )
+
+        # Esecuzioni valide in blu
         if not valid_runs.empty:
+            plt.scatter(
+                valid_runs['index'],
+                valid_runs['score'],
+                c='blue',
+                label='Esecuzioni Valide',
+                alpha=0.7
+            )
+
+        # Linea del miglior punteggio progressivo (sui valori reali)
+        if not df.empty:
             df['best_so_far'] = df['score'].cummax()
             plt.plot(df.index, df['best_so_far'], c='green', linewidth=2, label='Best So Far')
 
@@ -66,12 +86,12 @@ def plot_results():
         plt.ylabel("Fitness (Score Medio)")
         plt.legend()
         plt.grid(True, alpha=0.3)
-        
+
         output_plot = output_dir / 'fitness_plot.png'
         plt.savefig(output_plot)
         print(f"Grafico salvato in: {output_plot}")
         plt.show()
-        
+
     except Exception as e:
         print(f"Errore durante il plotting: {e}")
 

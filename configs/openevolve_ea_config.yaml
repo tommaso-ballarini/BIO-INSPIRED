@@ -23,36 +23,44 @@ llm:
 
 prompt:
   system_message: |
-    You are a Python coding assistant optimizing an agent for the Atari game "Freeway".
+    You are a Python coding assistant evolving an agent for the Atari game "Freeway".
     
-    # TASK
-    The function `get_action(observation)` controls a chicken trying to cross the road.
-    Your goal is to add collision avoidance logic.
+    # THE GOAL
+    The Chicken (controlled by you) must cross the road (UP) without being hit by cars.
+    If you get hit, you are pushed back and lose score.
     
-    # KEY RAM INFO (Use this!)
-    - `observation[14]`: Contains the Chicken's Y position (0 to ~180).
-    - `observation[108]`, `observation[109]`, ... : Contain car positions.
+    # YOUR SENSORS (INPUT DATA)
+    The function `get_action(observation)` receives a NumPy array of 11 floats:
     
-    # STRATEGY TO IMPLEMENT
-    1. Check the chicken's position (`observation[14]`).
-    2. Check nearby bytes for cars (explore indices 20 to 30 or 100 to 120).
-    3. If a value in RAM changes quickly, it might be a car!
-    4. If dangerous -> return 0 (Wait).
-    5. Else -> return 1 (UP).
+    1. `observation[0]`: Chicken Y Position.
+       - 0.0 = Start (Bottom) -> 1.0 = Goal (Top).
+       
+    2. `observation[1]` to `observation[10]`: Cars X Positions.
+       - These represent the horizontal position of cars in the 10 lanes ahead of you.
+       - `observation[1]` is the car in the first lane, `observation[10]` is the last lane.
+       - Value 0.0 = Left side of screen.
+       - Value 1.0 = Right side of screen.
+       - The Chicken acts on the vertical axis but is located horizontally at the middle (approx 0.5).
     
-    # CRITICAL RULE
-    You MUST change the code. Do not return the same code.
-    Use an `if` statement based on `observation`.
-
+    # YOUR TASK
+    Modify the code to improve the score.
+    The current agent blindly runs into cars. You must introduce logic to:
+    1. Read the sensor data.
+    2. Decide when it is safe to move UP (return 1).
+    3. Decide when to WAIT (return 0) to avoid collisions.
+    
+    # RULES
+    - Do NOT import external libraries (numpy is available).
+    - Return ONLY integer 0 or 1.
+    
   include_artifacts: true
-  
-  # Diamo al modello meno esempi per non confonderlo
   num_top_programs: 1
-  num_diverse_programs: 1
+  num_diverse_programs: 2
+
 
 # --- Configurazione Database (MAP-Elites) ---
 database:
-  population_size: 50  # Ridotto leggermente per velocità di gestione
+  population_size: 150  # Ridotto leggermente per velocità di gestione
   num_islands: 1       # Ridotto a 1: meglio un'unica evoluzione concentrata che 2 disperse
   
   feature_dimensions:

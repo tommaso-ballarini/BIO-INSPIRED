@@ -39,7 +39,7 @@ def select_agent():
         
     df = pd.read_csv(history_csv)
     # Filtra errori
-    valid_df = df[df['score'] > -900].sort_values(by='score', ascending=False)
+    valid_df = df[df['score'] > -2000].sort_values(by='score', ascending=False)
     
     if valid_df.empty:
         print("Nessun agente valido trovato.")

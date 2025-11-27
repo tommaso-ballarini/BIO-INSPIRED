@@ -1,3 +1,4 @@
+# openevolve_experiments/evaluate_agent.py
 import sys
 import os
 import importlib.util
@@ -9,16 +10,27 @@ import gymnasium as gym
 import numpy as np
 from pathlib import Path
 
+# --- IMPORTANTE: Assicurati che questo import funzioni ---
+# Se core.wrappers non viene trovato, controlla la struttura delle cartelle
+try:
+    from core.wrappers import FreewayOCAtariWrapper
+except ImportError:
+    # Fallback se esegui lo script da una cartella diversa
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+    from core.wrappers import FreewayOCAtariWrapper
+
+from openevolve.evaluation_result import EvaluationResult
+
 # --- Configurazione ---
 ENV_NAME = 'Freeway-v4'
 MAX_STEPS_PER_GAME = 1500
 NUM_GAMES_PER_EVAL = 3
 
-# Parametri Fitness
-REWARD_FACTOR = 10.0        # Punti per ogni attraversamento
-COLLISION_PENALTY = 2.0     # Punti persi per ogni collisione
-IDLE_PENALTY_PER_FRAME = 0.05 # Penalità per ogni frame passato fermo (dopo la soglia)
-MAX_IDLE_FRAMES = 90        # Frame di tolleranza (circa 3 secondi) prima di penalizzare l'immobilità
+# Parametri Fitness (Resi più severi)
+REWARD_FACTOR = 100.0         # Premiare tantissimo il successo
+COLLISION_PENALTY = 10.0      # Punire fortemente l'impatto
+IDLE_PENALTY_PER_FRAME = 0.1  # Punire lo stare fermi troppo a lungo
+MAX_IDLE_FRAMES = 60          # Abbassato a 2 secondi di tolleranza
 
 # Setup Percorsi
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -27,12 +39,10 @@ HISTORY_DIR = Path(project_root) / 'evolution_history'
 HISTORY_CSV = HISTORY_DIR / 'fitness_history.csv'
 HISTORY_DIR.mkdir(parents=True, exist_ok=True)
 
-# Inizializza CSV
 if not HISTORY_CSV.exists():
     with open(HISTORY_CSV, 'w', newline='') as f:
         csv.writer(f).writerow(["timestamp", "score", "collisions", "idle_penalty", "filename"])
 
-# Fix per Gym/Atari
 try:
     import ale_py
     gym.register_envs(ale_py)
@@ -51,72 +61,104 @@ def save_checkpoint(program_path, score, collisions, idle_penalty):
         pass
 
 def run_custom_simulation(agent_func):
-    """Esegue il gioco contando collisioni e tempo di immobilità."""
+    """Esegue il gioco usando il Wrapper per l'agente ma la RAM per l'arbitro."""
     try:
         env = gym.make(ENV_NAME, obs_type='ram')
     except:
         env = gym.make('ALE/Freeway-v5', obs_type='ram')
 
+    # --- ATTIVAZIONE WRAPPER ---
+    translator = FreewayOCAtariWrapper(env)
+    # ---------------------------
+
     observation, _ = env.reset()
-    total_reward = 0
+    total_reward = 0.0
     collisions = 0
     idle_penalty_total = 0.0
-    
+
     prev_y = observation[14]
-    idle_counter = 0 # Conta frame consecutivi fermo
+    idle_counter = 0
+    last_action = None
+    same_action_count = 0
 
     for _ in range(MAX_STEPS_PER_GAME):
-        action = agent_func(observation)
+        
+        # 1. TRADUZIONE: RAM (128) -> Features (11 floats)
+        agent_view = translator.observation(observation)
+        
+        # 2. DECISIONE AGENTE
+        try:
+            # L'agente vede solo il vettore semplificato!
+            action = agent_func(agent_view)
+            action = int(action)
+        except Exception:
+            action = 1 # Fallback UP
+        
+        if action not in (0, 1, 2): action = 1
+
+        # Check anti-loop (se l'agente si blocca a premere sempre lo stesso tasto)
+        if last_action is None or action != last_action:
+            last_action = action
+            same_action_count = 1
+        else:
+            same_action_count += 1
+        
+        # 3. FISICA GIOCO (Input all'ambiente reale)
         observation, reward, terminated, truncated, _ = env.step(action)
         
+        # 4. VALUTAZIONE (Guardiamo la verità nella RAM)
         curr_y = observation[14]
-        
-        # 1. Rilevamento Collisione (Y diminuisce bruscamente)
+
+        # Collisione: Y scende bruscamente
         if curr_y < prev_y:
             collisions += 1
-            # Se veniamo colpiti ci muoviamo, quindi resettiamo l'idle
             idle_counter = 0
-        
-        # 2. Rilevamento Immobilità
+        # Immobilità
         elif curr_y == prev_y:
             idle_counter += 1
             if idle_counter > MAX_IDLE_FRAMES:
                 idle_penalty_total += IDLE_PENALTY_PER_FRAME
         else:
-            # Si è mosso (in avanti)
             idle_counter = 0
-        
+
         prev_y = curr_y
         total_reward += reward
-        
+
+        if same_action_count > 600: # Tagliamo se è bloccato da 20 secondi
+            break
         if terminated or truncated:
             break
-            
+
     env.close()
     return total_reward, collisions, idle_penalty_total
 
 def evaluate(program_path: str):
     try:
-        # Import dinamico
         spec = importlib.util.spec_from_file_location("evolved_agent", program_path)
         agent_module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(agent_module)
         agent_func = agent_module.get_action
-        
+
         avg_fitness = 0.0
         avg_collisions = 0.0
         avg_idle_penalty = 0.0
-        
+
         for _ in range(NUM_GAMES_PER_EVAL):
             game_reward, n_collisions, idle_pen = run_custom_simulation(agent_func)
-            
-            # Formula Fitness Completa
+
+            # Fitness aggiornata:
+            # Reward molto alto (100) per incentivare l'attraversamento
+            # Penalità collisione alta (10) per incentivare la prudenza
             fitness = (game_reward * REWARD_FACTOR) - (n_collisions * COLLISION_PENALTY) - idle_pen
             
+            # Se prende troppe botte senza segnare, penalità extra
+            if game_reward == 0 and n_collisions > 3:
+                fitness -= 200.0
+
             avg_fitness += fitness
             avg_collisions += n_collisions
             avg_idle_penalty += idle_pen
-            
+
         final_score = avg_fitness / NUM_GAMES_PER_EVAL
         final_collisions = avg_collisions / NUM_GAMES_PER_EVAL
         final_idle = avg_idle_penalty / NUM_GAMES_PER_EVAL
@@ -125,17 +167,16 @@ def evaluate(program_path: str):
 
         return EvaluationResult(
             metrics={
-                "combined_score": final_score, 
+                "combined_score": final_score,
                 "score": final_score,
                 "collisions": final_collisions,
                 "idle_penalty": final_idle,
-                "correctness": 1.0
+                "correctness": 1.0,
             }
         )
-        
+
     except Exception as e:
         save_checkpoint(program_path, -1000.0, 0, 0)
-        from openevolve.evaluation_result import EvaluationResult
         return EvaluationResult(
             metrics={"combined_score": -1000.0, "score": -1000.0, "correctness": 0.0},
             artifacts={"stderr": str(e)}
