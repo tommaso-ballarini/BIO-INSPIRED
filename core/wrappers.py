@@ -216,23 +216,20 @@ class FreewayOCAtariWrapper(gym.ObservationWrapper):
         # Valore RAM: ~175 (basso/start) a ~15 (alto/goal)
         chicken_ram_y = obs[14]
         # Normalizziamo: 0.0 = Start, 1.0 = Goal
-        # Usiamo 170.0 e 18.0 come range approssimativo sicuro
         y_norm = (170.0 - chicken_ram_y) / (170.0 - 18.0)
         state_vector[0] = np.clip(y_norm, 0.0, 1.0)
         
         # --- 2. AUTO (Byte 108 - 117) ---
-        # In Freeway, i byte da 108 a 117 contengono la X delle auto nelle 10 corsie.
-        # Valore RAM: 0 a 160 (circa)
+        # VERIFICATO DA DEBUG: 108 è la corsia in BASSO (Prima incontrata)
+        # Quindi manteniamo l'ordine sequenziale.
         car_bytes = [108, 109, 110, 111, 112, 113, 114, 115, 116, 117]
         
-        # Invertiamo l'ordine perché visivamente la corsia 1 è in basso
-        # ma in memoria spesso l'ordine è inverso. Questo ordine funziona bene.
         for i, byte_idx in enumerate(car_bytes):
             if byte_idx < len(obs):
                 car_x = obs[byte_idx]
-                # Normalizziamo X tra 0.0 e 1.0
+                # Normalizziamo X tra 0.0 (Sinistra) e 1.0 (Destra)
                 state_vector[1 + i] = car_x / 160.0
             else:
-                state_vector[1 + i] = 0.0 # Valore safe se la RAM è strana
+                state_vector[1 + i] = 0.0 # Valore safe
                 
         return state_vector
