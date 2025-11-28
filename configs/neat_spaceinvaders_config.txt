@@ -1,0 +1,80 @@
+[NEAT]
+fitness_criterion     = max
+fitness_threshold     = 20000
+pop_size              = 250
+reset_on_extinction   = False
+
+[DefaultGenome]
+# === Connessione al nostro problema ===
+num_inputs            = 8
+num_outputs           = 4
+num_hidden            = 0
+
+# --- STRUTTURA DINAMICA (Exploration fase iniziale) ---
+conn_add_prob           = 0.3
+conn_delete_prob        = 0.1
+node_add_prob           = 0.15
+node_delete_prob        = 0.05
+
+# --- PESI (MISSING PART FIXED) ---
+# Questi parametri definiscono come nascono i pesi e i loro limiti
+weight_init_mean        = 0.0
+weight_init_stdev       = 1.0
+weight_max_value        = 30.0
+weight_min_value        = -30.0
+
+# Questi parametri definiscono come mutano
+weight_mutate_power     = 0.8    
+weight_mutate_rate      = 0.8
+weight_replace_rate     = 0.1
+
+# --- ATTIVAZIONI ---
+activation_default      = tanh
+activation_mutate_rate  = 0.1
+activation_options      = tanh sigmoid relu
+
+# --- COMPATIBILITA ---
+compatibility_threshold = 3 
+compatibility_disjoint_coefficient = 1.0
+compatibility_weight_coefficient   = 0.5
+
+# --- BIAS ---
+bias_init_mean          = 0.0
+bias_init_stdev         = 1.0
+bias_max_value          = 30.0
+bias_min_value          = -30.0
+bias_mutate_power       = 0.5
+bias_mutate_rate        = 0.7
+bias_replace_rate       = 0.1
+
+# --- RESPONSE ---
+response_init_mean      = 1.0
+response_init_stdev     = 0.0
+response_max_value      = 30.0
+response_min_value      = -30.0
+response_mutate_power   = 0.0
+response_mutate_rate    = 0.0
+response_replace_rate   = 0.0
+
+# --- ALTRO ---
+enabled_default         = True
+enabled_mutate_rate     = 0.01
+
+feed_forward            = True
+initial_connection      = full
+
+aggregation_default     = sum
+aggregation_mutate_rate = 0.0
+aggregation_options     = sum
+
+[DefaultSpeciesSet]
+compatibility_threshold = 2
+
+[DefaultStagnation]
+species_fitness_func = max
+max_stagnation       = 20
+species_elitism      = 2
+
+[DefaultReproduction]
+elitism              = 2
+survival_threshold   = 0.2

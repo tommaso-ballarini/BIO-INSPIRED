@@ -1,29 +1,40 @@
-# core/env_factory.py
 import gymnasium as gym
 from ocatari.core import OCAtari
-from core.wrappers import NeatMsPacmanWrapper, NeatFreewayWrapper # etc
+from core.wrappers import PacmanHybridWrapper, FreewayOCAtariWrapper, SpaceInvadersOCAtariWrapper
 
 def make_evolution_env(game_name, render_mode=None):
     """
-    Crea un ambiente pronto per l'evoluzione (vettorializzato).
+    Crea un ambiente pronto per l'evoluzione.
+    CORREZIONE: Istanzia OCAtari passando la stringa del gioco, NON l'oggetto gym.
     """
-    # Mappatura semplice nome -> ambiente gym
+    # Mappatura nomi
     env_ids = {
         "pacman": "MsPacman-v4",
         "freeway": "Freeway-v4",
-        "bankheist": "BankHeist-v4"
+        "bankheist": "BankHeist-v4",
+        "spaceinvaders": "SpaceInvaders-v4"
     }
     
-    env = gym.make(env_ids[game_name], render_mode=render_mode)
+    if game_name not in env_ids:
+        # Fallback per ambienti standard non-OCAtari
+        try:
+            return gym.make(game_name, render_mode=render_mode)
+        except Exception:
+            raise ValueError(f"Gioco '{game_name}' non supportato.")
+
+    # --- FIX CRITICO ---
+    # Invece di creare l'env con gym.make e passarlo a OCAtari,
+    # passiamo direttamente la stringa ID (es. "SpaceInvaders-v4") a OCAtari.
+    env = OCAtari(env_ids[game_name], mode="ram", obs_mode="obj", render_mode=render_mode)
     
-    # Applica sempre OCAtari in modalità RAM per efficienza
-    env = OCAtari(env, mode="ram", obs_mode="obj")
-    
-    # Selettore del Wrapper specifico per il gioco
+    # Applicazione Wrapper
     if game_name == "pacman":
-        env = NeatMsPacmanWrapper(env)
+        env = PacmanHybridWrapper(env)
     elif game_name == "freeway":
-        # Implementerai questo basandoti sul report (array distanze auto)
+        env = FreewayOCAtariWrapper(env)
+    elif game_name == "bankheist":
         pass 
+    elif game_name == "spaceinvaders":
+        env = SpaceInvadersOCAtariWrapper(env)
         
     return env
