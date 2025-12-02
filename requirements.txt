@@ -10,3 +10,4 @@ openevolve
 ocatari #ha problemi di dipendenze con python=3.13, consigliato python=3.10 per sicurezza
 opencv-python
 imageio
+deap
