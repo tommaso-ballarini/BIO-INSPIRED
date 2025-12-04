@@ -263,3 +263,215 @@ class SpaceInvadersOCAtariWrapper(gym.ObservationWrapper):
         vec[6] = 1.0 if is_covered else 0.0
         
         return vec
+    
+
+class NeatMsPacmanWrapper(gym.ObservationWrapper):
+    """
+    Wrapper per Ms. Pac-Man che implementa l'ingegneria delle feature
+    descritta nel PDF tecnico (Sezione 4.1).
+    
+    Estrae feature semantiche da OCAtari (REM) e le trasforma in un
+    vettore fisso a bassa dimensionalità per NEAT.
+    
+    Feature Vector (20 dimensioni):
+    - [0-1]: Player position (x, y) normalizzate
+    - [2]: Player direction (0-3 mappato a 0.0-1.0)
+    - [3-10]: 4 Ghosts relative position (dx, dy) per ghost
+    - [11-14]: 4 Ghosts edibility status (0.0 o 1.0)
+    - [15-16]: Nearest Power Pill relative position (dx, dy)
+    - [17-18]: Nearest Fruit relative position (dx, dy)
+    - [19]: Dots eaten count (normalizzato)
+    """
+    
+    def _init_(self, env, max_objects=None):
+        super()._init_(env)
+        
+        # Dimensione fissa del vettore di feature
+        self.num_features = 20
+        
+        # Spazio di osservazione: vettore 1D di 20 float normalizzati in [0, 1]
+        self.observation_space = Box(
+            low=0.0, 
+            high=1.0, 
+            shape=(self.num_features,), 
+            dtype=np.float32
+        )
+        
+        # Costanti per normalizzazione (dimensioni schermo Atari standard)
+        self.SCREEN_WIDTH = 160.0
+        self.SCREEN_HEIGHT = 210.0
+        
+        # Massimo dots nel gioco (approssimativo per normalizzazione)
+        self.MAX_DOTS = 240.0
+        
+    def observation(self, obs):
+        """
+        Trasforma l'osservazione OCAtari in un vettore di feature.
+        
+        Args:
+            obs: Output di OCAtari (può essere ignorato se usiamo self.env.objects)
+            
+        Returns:
+            np.array: Vettore di 20 feature normalizzate
+        """
+        # Inizializza vettore di feature a zero
+        features = np.zeros(self.num_features, dtype=np.float32)
+        
+        # Estrai oggetti da OCAtari
+        # OCAtari popola self.env.objects con la lista di oggetti rilevati
+        objects = []
+        if hasattr(self.env, 'objects'):
+            objects = [o for o in self.env.objects if o is not None]
+        elif hasattr(self.env.unwrapped, 'objects'):
+            objects = [o for o in self.env.unwrapped.objects if o is not None]
+        
+        # --- 1. ESTRAZIONE PLAYER ---
+        player = self._find_player(objects)
+        player_x, player_y = 0.0, 0.0
+        
+        if player:
+            # Normalizza coordinate in [0, 1]
+            player_x = player.x / self.SCREEN_WIDTH
+            player_y = player.y / self.SCREEN_HEIGHT
+            features[0] = player_x
+            features[1] = player_y
+            
+            # Direzione (OCAtari fornisce orientation per alcuni giochi)
+            # Mappatura: 0=Right, 1=Left, 2=Up, 3=Down -> normalizzato a [0, 1]
+            if hasattr(player, 'orientation'):
+                features[2] = player.orientation / 3.0
+        
+        # --- 2. ESTRAZIONE GHOSTS ---
+        ghosts = self._find_ghosts(objects)
+        
+        # Ordina i ghosts per garantire input consistente
+        # (ordine alfabetico per categoria: Blinky, Inky, Pinky, Sue)
+        ghosts.sort(key=lambda g: g.category if hasattr(g, 'category') else '')
+        
+        for i in range(min(len(ghosts), 4)):
+            ghost = ghosts[i]
+            
+            # Posizione relativa (delta x, delta y)
+            # Nota: range può essere negativo, quindi spostiamo in [0, 1]
+            dx = (ghost.x / self.SCREEN_WIDTH) - player_x
+            dy = (ghost.y / self.SCREEN_HEIGHT) - player_y
+            
+            # Normalizza delta in [0, 1] con offset 0.5
+            # (dx può andare da -1 a +1, quindi (dx + 1) / 2 lo porta in [0, 1])
+            features[3 + i*2] = (dx + 1.0) / 2.0
+            features[4 + i*2] = (dy + 1.0) / 2.0
+            
+            # Stato di commestibilità (CRITICO per la strategia)
+            # OCAtari marca i ghosts come "edible" quando sono blu
+            edible = 0.0
+            if hasattr(ghost, 'rgb'):
+                # I ghosts commestibili sono blu in Ms. Pac-Man
+                # RGB tipico: (33, 33, 255) o simili
+                if ghost.rgb[2] > 200 and ghost.rgb[0] < 100:
+                    edible = 1.0
+            
+            features[11 + i] = edible
+        
+        # --- 3. NEAREST POWER PILL ---
+        power_pills = self._find_power_pills(objects)
+        
+        if player and power_pills:
+            nearest_pill = min(
+                power_pills, 
+                key=lambda p: (p.x - player.x)*2 + (p.y - player.y)*2
+            )
+            
+            dx = (nearest_pill.x / self.SCREEN_WIDTH) - player_x
+            dy = (nearest_pill.y / self.SCREEN_HEIGHT) - player_y
+            
+            features[15] = (dx + 1.0) / 2.0
+            features[16] = (dy + 1.0) / 2.0
+        else:
+            # Se non ci sono power pills, centra il valore (nessuna informazione)
+            features[15] = 0.5
+            features[16] = 0.5
+        
+        # --- 4. NEAREST FRUIT ---
+        fruits = self._find_fruits(objects)
+        
+        if player and fruits:
+            nearest_fruit = min(
+                fruits,
+                key=lambda f: (f.x - player.x)*2 + (f.y - player.y)*2
+            )
+            
+            dx = (nearest_fruit.x / self.SCREEN_WIDTH) - player_x
+            dy = (nearest_fruit.y / self.SCREEN_HEIGHT) - player_y
+            
+            features[17] = (dx + 1.0) / 2.0
+            features[18] = (dy + 1.0) / 2.0
+        else:
+            features[17] = 0.5
+            features[18] = 0.5
+        
+        # --- 5. DOTS EATEN COUNT ---
+        # Questa informazione può essere estratta da info o dalla RAM
+        # Per ora usiamo un placeholder (OCAtari potrebbe non esporla direttamente)
+        # In alternativa, possiamo contare i pellet rimanenti
+        dots_eaten = 0.0
+        
+        # Se OCAtari espone dots_eaten_count in info, usalo
+        if hasattr(self.env, '_get_ram'):
+            # AtariARI mapping per Ms. Pac-Man: dots_eaten_count è in RAM
+            # Questo richiede conoscenza specifica della mappa RAM
+            # Per semplicità, lasciamo a 0 o implementiamo conteggio pellet
+            pass
+        
+        features[19] = dots_eaten / self.MAX_DOTS
+        
+        return features
+    
+    def _find_player(self, objects):
+        """Trova l'oggetto Player nella lista OCAtari"""
+        for obj in objects:
+            if hasattr(obj, 'category'):
+                cat = obj.category.lower()
+                if 'player' in cat or 'pacman' in cat or 'pac-man' in cat:
+                    return obj
+        return None
+    
+    def _find_ghosts(self, objects):
+        """Trova tutti i ghosts nella lista OCAtari"""
+        ghosts = []
+        for obj in objects:
+            if hasattr(obj, 'category'):
+                cat = obj.category.lower()
+                if 'enemy' in cat or 'ghost' in cat:
+                    ghosts.append(obj)
+        return ghosts
+    
+    def _find_power_pills(self, objects):
+        """Trova tutte le Power Pills"""
+        pills = []
+        for obj in objects:
+            if hasattr(obj, 'category'):
+                cat = obj.category.lower()
+                # Le Power Pills sono solitamente "PowerPill" o "Ball" grandi
+                if 'power' in cat or ('ball' in cat and hasattr(obj, 'w') and obj.w > 4):
+                    pills.append(obj)
+        return pills
+    
+    def _find_fruits(self, objects):
+        """Trova i frutti bonus"""
+        fruits = []
+        for obj in objects:
+            if hasattr(obj, 'category'):
+                cat = obj.category.lower()
+                if 'fruit' in cat or 'cherry' in cat or 'strawberry' in cat:
+                    fruits.append(obj)
+        return fruits
+    
+    def reset(self, **kwargs):
+        """Reset dell'ambiente"""
+        obs, info = self.env.reset(**kwargs)
+        return self.observation(obs), info
+    
+    def step(self, action):
+        """Step dell'ambiente con trasformazione dell'osservazione"""
+        obs, reward, terminated, truncated, info = self.env.step(action)
+        return self.observation(obs), reward, terminated, truncated, info
