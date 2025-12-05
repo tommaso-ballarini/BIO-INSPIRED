@@ -9,7 +9,7 @@ diff_based_evolution: false  # L'LLM riscrive l'intera funzione, più stabile pe
 # --- Configurazione LLM (Ollama) ---
 llm:
   models:
-    - name: "gemma3:4b"  # Assicurati di averlo pullato: ollama pull gemma3:4b
+    - name: "gemma3:12b"  # Assicurati di averlo pullato: ollama pull gemma3:4b
       weight: 1.0
   
   api_base: "http://localhost:11434/v1"
@@ -24,27 +24,31 @@ prompt:
     You are an EVOLUTIONARY CODING ENGINE.
     
     # THE INPUT
-    You will receive a Python function `get_action(observation)` that currently performs RANDOM moves.
+    You will receive a Python function `get_action(observation)` that currently performs RANDOM moves or STAYS STILL.
     
     # YOUR MISSION
-    You MUST replace the random logic with INTELLIGENT logic.
-    The agent must cross the road (reach Y=1.0) without being hit by cars.
+    The agent is currently stupid. Its movement are random.
+    You MUST implement logic that checks ONLY the lane where the chicken currently is.
     
-    # SENSORS AVAILABLE (observation vector)
-    - obs[0]: Chicken Y Position (0.0=Bottom, 1.0=Top/Goal).
-    - obs[1] to obs[10]: Horizontal distance to cars in each lane.
-      - Lane 1 (Bottom) is obs[1]. Lane 10 (Top) is obs[10].
-      - Values represent normalized X position of the nearest car.
+    # SENSORS (observation vector)
+    - obs[0]: Chicken Y Position (0.0=Start/Bottom, 1.0=Goal/Top), X position of the chicken is always about 0.2
+    - obs[1-10]: Car position from 0 (completely to the left) to 1 (completely to the right) of the car in Lane 1 (Bottom) to Lane 10 (Top).
     
-    # STRATEGY HINTS
-    1. EXTRACT SENSORS: Use `chicken_y = observation[0]` and `car_lane_i = observation[i]`.
-    2. CHECK DISTANCE: If a car is too close (e.g. `car < 0.2`), WAIT (action 0).
-    3. MOVE FORWARD: If the path is clear, MOVE UP (action 1).
+    # LOGIC HINTS (USE THIS LOGIC)
+    1. CALCULATE CURRENT LANE:
+       The road has 10 lanes. Calculate: `current_lane = int(observation[0] * 10)`
+       (Clamp it between 0 and 9 to avoid errors).
+       
+    2. CHECK ONLY RELEVANT CAR:
+       Get the car distance for your specific lane: `danger = observation[1 + current_lane]`
+       
+    3. DECIDE:
+       - If `danger < xxx` (car is close in MY lane) -> WAIT.
+       - Else -> MOVE UP.
     
     # CRITICAL RULES
-    - DO NOT return random actions.
-    - DO NOT use external libraries (except numpy/random if strictly needed, but logic is better).
-    - Return ONLY the executable Python code for the function.
+    - Do NOT check all cars. Check only the one in `current_lane`.
+    - Return ONLY the executable Python code.
     
   include_artifacts: true
   num_top_programs: 1

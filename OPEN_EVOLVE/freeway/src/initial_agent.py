@@ -12,7 +12,7 @@ def get_action(observation):
     chicken_y = observation[0]
     
     # Cars Horizontal Positions (Lane 1 to 10)
-    # Value is normalized X pos. If close to chicken X (usually center), collision risk!
+    # Value is normalized X pos. If close to chicken X (about 0.25), collision risk!
     cars = observation[1:11] 
     
     # --- CURRENT LOGIC: RANDOM ---
