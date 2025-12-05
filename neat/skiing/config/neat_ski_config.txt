@@ -1,8 +1,10 @@
+# File: config/neat_ski_config.txt
+
 [NEAT]
-# Criterio di fitness: minimizzazione (tempo più basso vince in Skiing)
-fitness_criterion     = min
+# Criterio di fitness: massimizzazione (il valore più alto dato da 150000 - Costo vince)
+fitness_criterion     = max
 # Soglia di fitness per terminazione anticipata
-fitness_threshold     = 30.0
+fitness_threshold     = 145000.0
 # Dimensione popolazione
 pop_size              = 100
 # Non resettare se una specie si estingue
@@ -14,19 +16,10 @@ no_fitness_termination = True
 # ==================================================================
 # STRUTTURA RETE
 # ==================================================================
-# Input: 124 feature totali con wrapper
-# Breakdown:
-#   [0-1]:   Skier position (x, y)
-#   [2-4]:   Speed, delta_x, delta_speed
-#   [5-12]:  Obstacle sensors 8 directions
-#   [13-16]: Gate detection (left/right dist+y)
-#   [17-18]: Collision state
-#   [19-21]: Timer info
-#   [22-23]: Free space (left, right)
-#   [24-123]: Visual grid 10x10
-num_inputs            = 124
+# Input: 128 (RAM state di Atari Skiing)
+num_inputs            = 128
 
-# Output: 3 azioni Skiing (LEFT, NOOP, RIGHT)
+# Output: 3 azioni possibili (NOOP, RIGHT, LEFT - mappate dal wrapper)
 num_outputs           = 3
 
 # Nodi nascosti iniziali
@@ -117,13 +110,14 @@ conn_delete_prob        = 0.3
 # SPECIAZIONE
 # ==================================================================
 [DefaultSpeciesSet]
-compatibility_threshold = 3.0
+# Valori tipici: 2.0-4.0 (più basso = più specie)
+compatibility_threshold = 2.5
 
 # ==================================================================
 # STAGNAZIONE (Gestione Specie Stagnanti)
 # ==================================================================
 [DefaultStagnation]
-species_fitness_func = min
+species_fitness_func = max
 max_stagnation       = 15
 species_elitism      = 2
 
