@@ -83,9 +83,9 @@ def visualize_game(genome, config):
     wrapped_env = SkiingCustomWrapper(
             env, 
             enable_steering_cost=False,             # Abilita/Disabilita costo sterzo
-            min_change_ratio=0.05,                 # Minima percentuale di azioni non-NOOP richieste
+            min_change_ratio=0.2,                 # Minima percentuale di azioni non-NOOP richieste
             steering_cost_per_step=1.0,             # Penalità per ogni passo di sterzo,           
-            edge_penalty_multiplier=40.0, # AUMENTA QUESTO VALORE per punire i bordi
+            edge_penalty_multiplier=30.0, # AUMENTA QUESTO VALORE per punire i bordi
             edge_threshold=40
         )
     

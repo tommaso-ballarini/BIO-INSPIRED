@@ -38,7 +38,7 @@ except ImportError:
 # --- CONFIGURAZIONE ESPERIMENTO ---
 ENV_ID = "ALE/Skiing-v5"
 CONFIG_FILE_NAME = "neat_ski_config.txt"
-NUM_GENERATIONS = 5 # Aumentato per un test più significativo
+NUM_GENERATIONS = 15 # Aumentato per un test più significativo
 MAX_STEPS = 20000
 NUM_WORKERS = max(1, multiprocessing.cpu_count() - 2)
 
@@ -104,7 +104,7 @@ def calculate_fitness(wrapped_env, net, max_steps=MAX_STEPS, debug=False):
         fitness_min = abs(total_reward) + 100000.0
     else:
         # Errore o interruzione anomala
-        fitness_min = 100000.0
+        fitness_min = 1000000.0
         
     # 2. Aggiungi Penalità dal Wrapper
     steering_cost = wrapped_env.steering_cost
@@ -112,7 +112,11 @@ def calculate_fitness(wrapped_env, net, max_steps=MAX_STEPS, debug=False):
 
     fitness_min += steering_cost 
     fitness_min += stability_penalty
-
+    fitness_min += wrapped_env.edge_cost
+    MOVEMENT_BONUS_MULTIPLIER = 5.0 
+    
+    movement_bonus = wrapped_env.total_x_movement * MOVEMENT_BONUS_MULTIPLIER
+    fitness_min -= movement_bonus # <--- Sottrai il bonus!
     # 3. Conversione a fitness massimizzata (Obiettivo NEAT)
     MAX_FITNESS_CAP = 150000.0 
     final_inverted_fitness = MAX_FITNESS_CAP - fitness_min
@@ -120,6 +124,7 @@ def calculate_fitness(wrapped_env, net, max_steps=MAX_STEPS, debug=False):
     if debug:
         print(f"Steps: {steps}, Terminated: {terminated}")
         print(f"Total Reward: {total_reward}")
+        print(f"Bonus Movimento X: -{movement_bonus:.2f}")
         # Usa .unwrapped per accedere ai dati di info originali
         print(f"Lives remaining: {wrapped_env.unwrapped.ale.lives()}") 
         print(f"Cost Summary: Steering={steering_cost:.2f}, Stability={stability_penalty:.2f}")
@@ -144,10 +149,10 @@ def eval_single_genome(genome, config):
         # QUI puoi modificare i valori delle penalità per testare le strategie!
         wrapped_env = SkiingCustomWrapper(
             env, 
-            enable_steering_cost=True,             # Abilita/Disabilita costo sterzo
+            enable_steering_cost=False,             # Abilita/Disabilita costo sterzo
             min_change_ratio=0.05,                 # Minima percentuale di azioni non-NOOP richieste
             steering_cost_per_step=1.0,             # Penalità per ogni passo di sterzo,           
-            edge_penalty_multiplier=15.0, # AUMENTA QUESTO VALORE per punire i bordi
+            edge_penalty_multiplier=30.0, # AUMENTA QUESTO VALORE per punire i bordi
             edge_threshold=40
         )
         
