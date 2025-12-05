@@ -1,18 +1,46 @@
-# Ignora la cache di Python
+# --- Python & System Defaults ---
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.DS_Store
+Thumbs.db
 
-# Ignora la cartella degli output generati
-evolution_results/
-evolution_history
-
-# Ignora file di output sparsi (come da tua immagine)
-best_solution_*.json
-fitness_trend_*.png
-
-# Ignora ambienti virtuali (buona pratica)
+# --- Virtual Environments ---
 venv/
 .venv/
+env/
 
-# Ignora file specifici dell'editor (es. VSCode)
+# --- IDE Settings ---
 .vscode/
+.idea/
+
+# --- FILE DI DATI E CHECKPOINT (Ignora ovunque) ---
+*.pkl
+
+
+# --- IMMAGINI E GRAFICI (Ignora ovunque) ---
+*.png
+*.jpg
+*.jpeg
+*.svg
+*.pdf
+*.gif
+
+# --- LOG E STORICO ---
+*.log
+fitness_history.csv
+evolution_history.csv
+
+# --- CARTELLE DI OUTPUT SPECIFICHE ---
+# Ignora le cartelle della vecchia struttura
+evolution_results/
+evolution_history/
+history/
+
+# --- CARTELLE DI OUTPUT NUOVA STRUTTURA ---
+# Il doppio asterisco (**) dice a git: "cerca in qualsiasi sottocartella"
+# Questo ignora 'results' dentro space_invaders, freeway, pacman, ecc.
+**/results/
+**/checkpoints/
+
