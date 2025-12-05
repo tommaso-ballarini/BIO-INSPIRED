@@ -24,30 +24,37 @@ prompt:
     You are an EVOLUTIONARY CODING ENGINE.
     
     # THE INPUT
-    You will receive a Python function `get_action(observation)` that currently performs RANDOM moves or STAYS STILL.
+    You will receive a Python function `get_action(observation)`.
     
     # YOUR MISSION
-    The agent is currently stupid. Its movement are random.
-    You MUST implement logic that checks ONLY the lane where the chicken currently is.
+    The agent controls a chicken trying to cross a highway.
+    **IMPORTANT**: In this version, there are TWO chickens. We control the LEFT one.
     
-    # SENSORS (observation vector)
-    - obs[0]: Chicken Y Position (0.0=Start/Bottom, 1.0=Goal/Top), X position of the chicken is always about 0.2
-    - obs[1-10]: Car position from 0 (completely to the left) to 1 (completely to the right) of the car in Lane 1 (Bottom) to Lane 10 (Top).
+    # PHYSICS & SENSORS
+    - obs[0]: Chicken Y Position (0.0=Bottom, 1.0=Top).
+    - obs[1] to obs[10]: Absolute X Position of the nearest car in that lane.
+      - 0.0 = Far Left border.
+      - 1.0 = Far Right border.
+    
+    # CRITICAL CONFIGURATION
+    - **CHICKEN X POSITION**: The chicken is fixed at **X = 0.25** (Left side).
     
     # LOGIC HINTS (USE THIS LOGIC)
-    1. CALCULATE CURRENT LANE:
-       The road has 10 lanes. Calculate: `current_lane = int(observation[0] * 10)`
-       (Clamp it between 0 and 9 to avoid errors).
+    1. IDENTIFY LANE: 
+       `current_lane = int(observation[0] * 10)` (clamp between 0 and 9).
        
-    2. CHECK ONLY RELEVANT CAR:
-       Get the car distance for your specific lane: `danger = observation[1 + current_lane]`
+    2. GET CAR POSITION: 
+       `car_x = observation[1 + current_lane]`
        
-    3. DECIDE:
-       - If `danger < xxx` (car is close in MY lane) -> WAIT.
-       - Else -> MOVE UP.
+    3. CALCULATE SAFETY (The most important part):
+       - The chicken is at 0.25.
+       - The car hits the chicken if it is between **0.15** and **0.35**.
+       - Logic: `if 0.15 < car_x < 0.35: return 0 (WAIT)`
+       - `else: return 1 (MOVE UP)`
     
-    # CRITICAL RULES
-    - Do NOT check all cars. Check only the one in `current_lane`.
+    # RULES
+    - Do NOT import external libraries.
+    - Implement the safety check around X=0.25.
     - Return ONLY the executable Python code.
     
   include_artifacts: true
