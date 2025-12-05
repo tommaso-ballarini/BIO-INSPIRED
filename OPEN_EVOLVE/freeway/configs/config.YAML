@@ -1,0 +1,68 @@
+# --- Impostazioni Generali ---
+max_iterations: 20
+random_seed: 42
+log_level: "INFO"
+
+# --- Impostazioni di Evoluzione ---
+diff_based_evolution: false  # L'LLM riscrive l'intera funzione, più stabile per modelli piccoli
+
+# --- Configurazione LLM (Ollama) ---
+llm:
+  models:
+    - name: "gemma3:4b"  # Assicurati di averlo pullato: ollama pull gemma3:4b
+      weight: 1.0
+  
+  api_base: "http://localhost:11434/v1"
+  api_key: "ollama"
+  
+  temperature: 0.8 # Un po' di creatività serve per uscire dal random
+  timeout: 500
+  retries: 3
+
+prompt:
+  system_message: |
+    You are an EVOLUTIONARY CODING ENGINE.
+    
+    # THE INPUT
+    You will receive a Python function `get_action(observation)` that currently performs RANDOM moves.
+    
+    # YOUR MISSION
+    You MUST replace the random logic with INTELLIGENT logic.
+    The agent must cross the road (reach Y=1.0) without being hit by cars.
+    
+    # SENSORS AVAILABLE (observation vector)
+    - obs[0]: Chicken Y Position (0.0=Bottom, 1.0=Top/Goal).
+    - obs[1] to obs[10]: Horizontal distance to cars in each lane.
+      - Lane 1 (Bottom) is obs[1]. Lane 10 (Top) is obs[10].
+      - Values represent normalized X position of the nearest car.
+    
+    # STRATEGY HINTS
+    1. EXTRACT SENSORS: Use `chicken_y = observation[0]` and `car_lane_i = observation[i]`.
+    2. CHECK DISTANCE: If a car is too close (e.g. `car < 0.2`), WAIT (action 0).
+    3. MOVE FORWARD: If the path is clear, MOVE UP (action 1).
+    
+    # CRITICAL RULES
+    - DO NOT return random actions.
+    - DO NOT use external libraries (except numpy/random if strictly needed, but logic is better).
+    - Return ONLY the executable Python code for the function.
+    
+  include_artifacts: true
+  num_top_programs: 1
+  num_diverse_programs: 2  # Chiediamo 2 varianti per ogni iterazione
+
+# --- Configurazione Database (MAP-Elites) ---
+database:
+  population_size: 100   # 100 è un buon compromesso per test veloci
+  num_islands: 1
+  
+  feature_dimensions:
+    - "complexity"       # Lunghezza codice / Complessità ciclomatica
+    - "score"            # Punteggio fitness
+  feature_bins: 5
+
+# --- Configurazione Valutatore ---
+evaluator:
+  timeout: 300
+  cascade_evaluation: false
+  use_llm_feedback: false
+  parallel_evaluations: 1 # Con Ollama locale, meglio 1 alla volta se la GPU è satura

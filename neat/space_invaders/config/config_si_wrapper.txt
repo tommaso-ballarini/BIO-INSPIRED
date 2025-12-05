@@ -1,0 +1,81 @@
+[NEAT]
+fitness_criterion     = max
+fitness_threshold     = 20000
+pop_size              = 400
+reset_on_extinction   = False
+
+[DefaultGenome]
+# === INPUT GRID 10x10 ===
+num_inputs            = 256
+num_outputs           = 4
+num_hidden            = 0
+
+# --- STRUTTURA ---
+# Probabilità leggermente ridotte per evitare "spaghetti code" immediato con 100 input
+conn_add_prob         = 0.25
+conn_delete_prob      = 0.1
+node_add_prob         = 0.2
+node_delete_prob      = 0.05
+
+# --- PESI ---
+weight_init_mean      = 0.0
+weight_init_stdev     = 1.0
+weight_max_value      = 30.0
+weight_min_value      = -30.0
+weight_mutate_power   = 0.8   
+weight_mutate_rate    = 0.8
+weight_replace_rate   = 0.2
+
+# --- ATTIVAZIONI ---
+# Tanh è ottimo per grid values (-1, 1, 2)
+activation_default      = tanh
+activation_mutate_rate  = 0.1
+activation_options      = tanh sigmoid relu
+
+# --- COMPATIBILITA ---
+# Aumentata perché i genomi sono più grandi (più connessioni)
+compatibility_disjoint_coefficient = 1.0
+compatibility_weight_coefficient   = 0.5
+
+# --- BIAS ---
+bias_init_mean        = 0.0
+bias_init_stdev       = 1.0
+bias_max_value        = 30.0
+bias_min_value        = -30.0
+bias_mutate_power     = 0.5
+bias_mutate_rate      = 0.7
+bias_replace_rate     = 0.1
+
+# --- RESPONSE ---
+response_init_mean    = 1.0
+response_init_stdev   = 0.0
+response_max_value    = 30.0
+response_min_value    = -30.0
+response_mutate_power = 0.0
+response_mutate_rate  = 0.0
+response_replace_rate = 0.0
+
+# --- ALTRO ---
+enabled_default         = True
+enabled_mutate_rate     = 0.01
+
+# Importante: True. Le RNN con 100 input sono lentissime da allenare.
+feed_forward            = True
+# Partial direct riduce il numero di connessioni iniziali (meno caos all'inizio)
+initial_connection      = full_direct
+
+aggregation_default     = sum
+aggregation_mutate_rate = 0.0
+aggregation_options     = sum
+
+[DefaultSpeciesSet]
+compatibility_threshold = 1.75
+
+[DefaultStagnation]
+species_fitness_func = max
+max_stagnation       = 10
+species_elitism      = 2
+
+[DefaultReproduction]
+elitism              = 2
+survival_threshold   = 0.15
