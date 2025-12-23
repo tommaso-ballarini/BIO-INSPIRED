@@ -4,6 +4,7 @@ fitness_criterion     = max
 # Fitness threshold: If an agent reaches this score, stop.
 # (e.g. 20 gates * 100 bonus = 2000 roughly)
 fitness_threshold     = 25000.0
+# originale 100
 pop_size              = 100
 reset_on_extinction   = False
 no_fitness_termination = False
@@ -18,7 +19,7 @@ num_inputs            = 9
 num_outputs           = 3
 
 # --- NETWORK STRUCTURE ---
-num_hidden            = 2
+num_hidden            = 10
 feed_forward          = False
 initial_connection    = full_direct
 
@@ -83,7 +84,7 @@ structural_mutation_surer = default
 
 [DefaultSpeciesSet]
 # Low threshold to create more species with small networks
-compatibility_threshold = 2.6
+compatibility_threshold = 3.5
 
 [DefaultStagnation]
 species_fitness_func = max
