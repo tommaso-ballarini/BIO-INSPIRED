@@ -83,6 +83,7 @@ def visualize():
 
     observation, info = env.reset(seed=14)
     done = False
+    true_game_score = 0.0
     total_reward = 0.0
     steps = 0
     
@@ -103,6 +104,12 @@ def visualize():
             total_reward += reward
             done = terminated or truncated
             steps += 1
+
+            if 'native_reward' in info:
+                true_game_score += info['native_reward']
+            else:
+                # Fallback se non hai ancora aggiornato il wrapper (sarà impreciso)
+                pass
             
             # Debug info
             if steps % 60 == 0:
@@ -117,6 +124,7 @@ def visualize():
         env.close()
         print(f"\nGame finished.")
         print(f"   Total Score (Fitness): {total_reward:.2f}")
+        print(f"🕹️  True Game Score (Atari):     {true_game_score:.2f}")
 
 if __name__ == "__main__":
     visualize()

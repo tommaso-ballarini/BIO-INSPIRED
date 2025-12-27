@@ -20,7 +20,7 @@ except ImportError:
     sys.exit(1)
 
 # --- CONFIGURATION ---
-NUM_GENERATIONS = 50
+NUM_GENERATIONS = 150
 NUM_WORKERS = max(1, multiprocessing.cpu_count() - 2) # Leave 2 cores free
 CONFIG_FILENAME = "config_wrapper_ffnn.txt"
 CHECKPOINT_PREFIX = "neat-checkpoint-"
@@ -183,7 +183,7 @@ def run_training():
     p.add_reporter(neat.StdOutReporter(True))
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
-    p.add_reporter(neat.Checkpointer(generation_interval=5, filename_prefix=CHECKPOINT_PREFIX))
+    #p.add_reporter(neat.Checkpointer(generation_interval=5, filename_prefix=CHECKPOINT_PREFIX))
     
     # 5. Run Parallel Evolution
     pe = neat.ParallelEvaluator(NUM_WORKERS, eval_genome)
