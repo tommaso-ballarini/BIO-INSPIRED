@@ -14,18 +14,18 @@ if project_root not in sys.path:
 
 # Import OCAtari Wrapper
 try:
-    from wrapper.wrapper_rnn import BioSkiingOCAtariWrapper
+    from wrapper.wrapper_ffnn import BioSkiingOCAtariWrapper
     print("BioSkiingOCAtariWrapper imported successfully.")
 except ImportError:
-    print("CRITICAL: wrapper/wrapper_rnn.py not found.")
+    print("CRITICAL: wrapper/wrapper_ffnn.py not found.")
     print("   Ensure the OCAtari wrapper is saved in the wrapper folder.")
     sys.exit(1)
 
 # --- CONFIGURATION ---
 # Results directory
-RESULTS_DIR = os.path.join(project_root, "evolution_results", "wrapper_rnn_run")
+RESULTS_DIR = os.path.join(project_root, "evolution_results", "wrapper_ffnn_run")
 # NEAT Configuration
-CONFIG_PATH = os.path.join(project_root, "config", "config_wrapper_rnn.txt")
+CONFIG_PATH = os.path.join(project_root, "config", "config_wrapper_ffnn.txt")
 
 def get_latest_winner():
     """Finds the latest .pkl file in the results directory."""
@@ -84,7 +84,6 @@ def visualize():
     observation, info = env.reset(seed=14)
     done = False
     total_reward = 0.0
-    true_game_score = 0.0   # Score originale Atari
     steps = 0
     
     print("\n--- STARTING RUN (Ctrl+C to stop) ---")
@@ -102,14 +101,6 @@ def visualize():
             observation, reward, terminated, truncated, info = env.step(action)
             
             total_reward += reward
-            # Se abbiamo modificato il wrapper correttamente, usiamo quello
-            if 'native_reward' in info:
-                true_game_score += info['native_reward']
-            else:
-                # Fallback se non hai ancora aggiornato il wrapper (sarà impreciso)
-                pass
-
-            
             done = terminated or truncated
             steps += 1
             
@@ -126,7 +117,6 @@ def visualize():
         env.close()
         print(f"\nGame finished.")
         print(f"   Total Score (Fitness): {total_reward:.2f}")
-        print(f"🕹️  True Game Score (Atari):     {true_game_score:.2f}")
 
 if __name__ == "__main__":
     visualize()

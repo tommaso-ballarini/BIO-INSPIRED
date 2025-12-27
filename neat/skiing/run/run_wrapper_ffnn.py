@@ -14,20 +14,19 @@ parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
 try:
-    from wrapper.wrapper_rnn import BioSkiingOCAtariWrapper
+    from wrapper.wrapper_ffnn import BioSkiingOCAtariWrapper
 except ImportError:
-    print("Error: 'wrapper/wrapper_rnn.py' not found")
+    print("Error: 'wrapper/wrapper_ffnn.py' not found")
     sys.exit(1)
 
 # --- CONFIGURATION ---
-NUM_GENERATIONS = 150
+NUM_GENERATIONS = 50
 NUM_WORKERS = max(1, multiprocessing.cpu_count() - 2) # Leave 2 cores free
-CONFIG_FILENAME = "config_wrapper_rnn.txt"
+CONFIG_FILENAME = "config_wrapper_ffnn.txt"
 CHECKPOINT_PREFIX = "neat-checkpoint-"
 
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-RESULTS_DIR = os.path.join(parent_dir, 'evolution_results', 'wrapper_rnn_run')
-
+RESULTS_DIR = os.path.join(parent_dir, 'evolution_results', 'wrapper_ffnn_run')
 def eval_genome(genome, config):
     """
     Function executed by each worker in parallel.
@@ -41,8 +40,8 @@ def eval_genome(genome, config):
         
     observation, info = env.reset()
     
-    # Create Neural Network (Recurrent for memory)
-    net = neat.nn.RecurrentNetwork.create(genome, config)
+    # Create Neural Network (Feed-Forward for memory)
+    net = neat.nn.FeedForwardNetwork.create(genome, config)
     
     done = False
     total_reward = 0.0
@@ -158,10 +157,10 @@ def plot_results(stats, save_dir):
 def run_training():
     # 1. Setup Paths
     config_path = os.path.join(parent_dir, 'config', CONFIG_FILENAME)
-    results_dir = os.path.join(parent_dir, 'evolution_results', 'wrapper_rnn_run')
+    results_dir = os.path.join(parent_dir, 'evolution_results', 'wrapper_ffnn_run')
     os.makedirs(results_dir, exist_ok=True)
     
-    print(f"Starting Wrapper RNN Training")
+    print(f"Starting Wrapper FFNN Training")
     print(f"Config: {config_path}")
     print(f"Output: {results_dir}")
     print(f"Workers: {NUM_WORKERS}")
