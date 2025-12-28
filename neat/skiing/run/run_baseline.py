@@ -91,8 +91,7 @@ def plot_results(stats, save_dir):
 
     # --- 2. SPECIATION PLOT (ROBUST) ---
     try:
-        # We access generation_statistics directly.
-        # It is a list of dicts: [{species_id: SpeciesObject}, ...]
+
         if not stats.generation_statistics:
             print("No speciation data available.")
             return
@@ -110,7 +109,6 @@ def plot_results(stats, save_dir):
             for s_id in all_species:
                 if s_id in gen_data:
                     species_obj = gen_data[s_id]
-                    # Safe size extraction: check for .members attribute or use len()
                     try:
                         if hasattr(species_obj, 'members'):
                             row.append(len(species_obj.members))
@@ -132,7 +130,6 @@ def plot_results(stats, save_dir):
             plt.xlabel("Generations")
             plt.ylabel("Population")
             
-            # Show legend only if few species to avoid clutter
             if len(all_species) < 15:
                 plt.legend(loc='upper left')
             
@@ -191,7 +188,6 @@ def run_baseline():
         traceback.print_exc()
 
 if __name__ == "__main__":
-    # Fix for multiprocessing on Windows
     try:
         multiprocessing.set_start_method('spawn')
     except RuntimeError:

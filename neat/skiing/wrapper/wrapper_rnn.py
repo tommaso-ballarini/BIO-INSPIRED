@@ -38,7 +38,6 @@ class BioSkiingOCAtariWrapper(gym.Wrapper):
     def step(self, action):
         obs, native_reward, terminated, truncated, info = self.env.step(action)
         
-        # 2. SALVALO NEL DIZIONARIO INFO
         info['native_reward'] = native_reward
         
         ram = self.env._env.unwrapped.ale.getRAM()
@@ -50,7 +49,7 @@ class BioSkiingOCAtariWrapper(gym.Wrapper):
 
         # --- RECALCULATE OBSERVATION (Needed for magnetic reward) ---
         current_obs = self._get_smart_obs() 
-        target_delta_x = current_obs[3]# -1.0 (left) to +1.0 (right). 0.0 is PERFECT CENTER.
+        target_delta_x = current_obs[3]
         target_exists = current_obs[5]
         
         custom_reward = 0.0
@@ -61,12 +60,9 @@ class BioSkiingOCAtariWrapper(gym.Wrapper):
             self.stuck_counter = 0
             
         # 2. MAGNET REWARD (New Guidance)
-        # If a gate is visible (Target Exists == 1.0)
         if target_exists > 0.5:
-            # Calculate alignment error (0.0 = Perfect, 1.0 = Far)
             alignment_error = abs(target_delta_x)
             
-            # If well aligned (error < 10%), give continuous reward
             if alignment_error < 0.1:
                 custom_reward += 1.0
             else:
@@ -77,9 +73,9 @@ class BioSkiingOCAtariWrapper(gym.Wrapper):
         others = [o for o in objects if isinstance(o, (Tree, Flag)) and not isinstance(o, Player)]
         if p:
             for o in others:
-                dist = abs(p.x - o.x) + abs(p.y - o.y) # Manhattan dist for speed
-                if dist < 5: # 5 pixels = full collision
-                    custom_reward -= 10.0 # SEVERE PUNISHMENT
+                dist = abs(p.x - o.x) + abs(p.y - o.y) 
+                if dist < 5: 
+                    custom_reward -= 10.0 
                     
             # Border Penalty
             if p.x < 10 or p.x > 150:
@@ -88,14 +84,14 @@ class BioSkiingOCAtariWrapper(gym.Wrapper):
             # Anti-Camping
             if abs(p.x - self.prev_x) < 0.1:
                 self.stuck_counter += 1
-                custom_reward -= 1.0 # Increased camping penalty
+                custom_reward -= 1.0 
             else:
                 self.stuck_counter = 0
                 custom_reward += 0.1
             
             self.prev_x = p.x
 
-        custom_reward -= 0.1 # Time
+        custom_reward -= 0.1 
         
         if self.stuck_counter > 100:
             truncated = True
@@ -139,7 +135,6 @@ class BioSkiingOCAtariWrapper(gym.Wrapper):
         
         if gate_found:
             # Calculate Normalized Delta
-            # If target_x is 50 and p.x is 40, delta = +10. Normalized to 80px (half screen)
             obs[3] = (target_x - p.x) / 80.0 
             obs[4] = target_dist / 200.0     
             obs[5] = 1.0                     

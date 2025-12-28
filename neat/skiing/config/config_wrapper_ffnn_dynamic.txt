@@ -1,26 +1,20 @@
 [NEAT]
 # Fitness criterion: maximize (we want high positive scores from Gate Bonuses)
 fitness_criterion     = max
-# Fitness threshold: If an agent reaches this score, stop.
-# (e.g. 20 gates * 100 bonus = 2000 roughly)
 fitness_threshold     = 25000.0
-# originale 100
 pop_size              = 100
 reset_on_extinction   = False
 no_fitness_termination = False
 
 [DefaultGenome]
 # --- INPUT AND OUTPUT ---
-# CRITICAL: Only 3 inputs (X, Angle, Gates) provided by the wrapper
-# erano 67
-# oppure 104
 num_inputs            = 9
 # 3 Actions: 0=NOOP, 1=RIGHT, 2=LEFT
 num_outputs           = 3
 
 # --- NETWORK STRUCTURE ---
-num_hidden            = 10
-feed_forward          = False
+num_hidden            = 14
+feed_forward          = True
 initial_connection    = full_direct
 
 # --- COMPATIBILITY (Speciation) ---

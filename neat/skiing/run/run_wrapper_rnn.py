@@ -21,9 +21,8 @@ except ImportError:
 
 # --- CONFIGURATION ---
 NUM_GENERATIONS = 150
-NUM_WORKERS = max(1, multiprocessing.cpu_count() - 2) # Leave 2 cores free
+NUM_WORKERS = max(1, multiprocessing.cpu_count() - 2)
 CONFIG_FILENAME = "config_wrapper_rnn.txt"
-CHECKPOINT_PREFIX = "neat-checkpoint-"
 
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 RESULTS_DIR = os.path.join(parent_dir, 'evolution_results', 'wrapper_rnn_run')
@@ -48,7 +47,7 @@ def eval_genome(genome, config):
     total_reward = 0.0
     steps = 0
     
-    while not done and steps < 4000: # Max steps safety limit
+    while not done and steps < 4000:
         inputs = observation
         
         # Check input dimensions
@@ -58,7 +57,7 @@ def eval_genome(genome, config):
 
         # Network Activation
         output = net.activate(inputs)
-        action = np.argmax(output) # 3 outputs: Noop, Right, Left
+        action = np.argmax(output)
         
         observation, reward, terminated, truncated, info = env.step(action)
         
@@ -99,8 +98,7 @@ def plot_results(stats, save_dir):
         print("Fitness graph saved.")
 
     # --- 2. SPECIATION GRAPH (FIXED) ---
-    # Use stats.generation_statistics (list of dicts)
-    
+  
     try:
         if not stats.generation_statistics:
             print("No speciation data available.")
@@ -120,7 +118,7 @@ def plot_results(stats, save_dir):
             for s_id in all_species:
                 if s_id in gen_data:
                     species_obj = gen_data[s_id]
-                    # Safe size extraction: check for .members attribute or use len()
+
                     try:
                         if hasattr(species_obj, 'members'):
                             row.append(len(species_obj.members))
@@ -137,12 +135,12 @@ def plot_results(stats, save_dir):
         
         if len(species_history) > 0:
             plt.figure(figsize=(10, 6))
-            plt.stackplot(range(len(stats.generation_statistics)), species_history, labels=[f"ID {i}" for i in all_species])
+            plt.stackplot(range(len(stats.generation_statistics)), 
+                          species_history, labels=[f"ID {i}" for i in all_species])
             plt.title("Species Evolution")
             plt.xlabel("Generations")
             plt.ylabel("Population")
             
-            # Legend only if few species
             if len(all_species) < 15:
                 plt.legend(loc='upper left')
             
@@ -156,6 +154,7 @@ def plot_results(stats, save_dir):
         traceback.print_exc()
 
 def run_training():
+
     # 1. Setup Paths
     config_path = os.path.join(parent_dir, 'config', CONFIG_FILENAME)
     results_dir = os.path.join(parent_dir, 'evolution_results', 'wrapper_rnn_run')
@@ -171,7 +170,6 @@ def run_training():
                          neat.DefaultSpeciesSet, neat.DefaultStagnation,
                          config_path)
     
-    # Quick input check
     if config.genome_config.num_inputs != 9:
         print(f"WARNING: OCAtari wrapper uses 9 inputs.")
         print(f"    Config has {config.genome_config.num_inputs}.")
@@ -184,12 +182,10 @@ def run_training():
     p.add_reporter(neat.StdOutReporter(True))
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
-    p.add_reporter(neat.Checkpointer(generation_interval=5, filename_prefix=CHECKPOINT_PREFIX))
-    
+  
     # 5. Run Parallel Evolution
     pe = neat.ParallelEvaluator(NUM_WORKERS, eval_genome)
     
-    # RUN!
     winner = p.run(pe.evaluate, NUM_GENERATIONS)
 
     # 6. Save Winner

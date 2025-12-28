@@ -6,13 +6,11 @@ import numpy as np
 import gymnasium as gym
 
 # --- 1. PATH SETUP ---
-# Add parent directory to path to locate the wrapper
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
 if project_root not in sys.path:
     sys.path.append(project_root)
 
-# Import OCAtari Wrapper
 try:
     from wrapper.wrapper_rnn import BioSkiingOCAtariWrapper
     print("BioSkiingOCAtariWrapper imported successfully.")
@@ -22,9 +20,7 @@ except ImportError:
     sys.exit(1)
 
 # --- CONFIGURATION ---
-# Results directory
 RESULTS_DIR = os.path.join(project_root, "evolution_results", "wrapper_rnn_run")
-# NEAT Configuration
 CONFIG_PATH = os.path.join(project_root, "config", "config_wrapper_rnn.txt")
 
 def get_latest_winner():
@@ -51,7 +47,6 @@ def visualize():
                          neat.DefaultSpeciesSet, neat.DefaultStagnation,
                          CONFIG_PATH)
     
-    # Check config inputs
     if config.genome_config.num_inputs != 9:
         print(f"WARNING: Config specifies {config.genome_config.num_inputs} inputs.")
         print("   OCAtari wrapper requires 9.")
@@ -62,14 +57,12 @@ def visualize():
     with open(winner_path, "rb") as f:
         winner = pickle.load(f)
 
-    # Tuple compatibility check
     if isinstance(winner, tuple):
         winner = winner[0]
 
     print(f"Registered fitness: {winner.fitness}")
 
     # 3. Create Neural Network
-    # Use RecurrentNetwork for memory
     net = neat.nn.RecurrentNetwork.create(winner, config)
 
     # 4. Start Environment (render_mode="human")
@@ -84,7 +77,7 @@ def visualize():
     observation, info = env.reset(seed=14)
     done = False
     total_reward = 0.0
-    true_game_score = 0.0   # Score originale Atari
+    true_game_score = 0.0
     steps = 0
     
     print("\n--- STARTING RUN (Ctrl+C to stop) ---")
@@ -102,11 +95,9 @@ def visualize():
             observation, reward, terminated, truncated, info = env.step(action)
             
             total_reward += reward
-            # Se abbiamo modificato il wrapper correttamente, usiamo quello
             if 'native_reward' in info:
                 true_game_score += info['native_reward']
             else:
-                # Fallback se non hai ancora aggiornato il wrapper (sarà impreciso)
                 pass
 
             

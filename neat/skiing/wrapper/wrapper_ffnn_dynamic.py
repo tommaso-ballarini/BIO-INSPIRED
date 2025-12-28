@@ -12,7 +12,7 @@ class BioSkiingOCAtariWrapper(gym.Wrapper):
     2. COLLISION PENALTY: Severely punishes contact with trees/flags.
     """
     
-    def __init__(self, render_mode=None):
+    def __init__(self, render_mode=None, curriculum_mode="beginner"):
         self.env = OCAtari("ALE/Skiing-v5", mode="ram", hud=False, render_mode=render_mode)
         super().__init__(self.env)
         
@@ -22,6 +22,24 @@ class BioSkiingOCAtariWrapper(gym.Wrapper):
         self.prev_gates = 32
         self.prev_x = 0
         self.stuck_counter = 0
+
+        self.curriculum_mode = curriculum_mode
+        self._set_curriculum_params()
+
+    def _set_curriculum_params(self):
+
+        if self.curriculum_mode == "beginner":
+            self.time_penalty = 0.13
+            self.angle_penalty_mult = 1.0
+            self.speed_bonus = 0.1
+        elif self.curriculum_mode == "advanced":
+            self.time_penalty = 0.2
+            self.angle_penalty_mult = 1.5
+            self.speed_bonus = 0.2
+
+    def set_curriculum_mode(self, mode):
+        self.curriculum_mode = mode
+        self._set_curriculum_params()
 
     def reset(self, **kwargs):
         obs, info = self.env.reset(**kwargs)
@@ -73,9 +91,9 @@ class BioSkiingOCAtariWrapper(gym.Wrapper):
         others = [o for o in objects if isinstance(o, (Tree, Flag)) and not isinstance(o, Player)]
         if p:
             for o in others:
-                dist = abs(p.x - o.x) + abs(p.y - o.y) 
-                if dist < 5: 
-                    custom_reward -= 10.0 
+                dist = abs(p.x - o.x) + abs(p.y - o.y)
+                if dist < 5:
+                    custom_reward -= 10.0
                     
             # Border Penalty
             if p.x < 10 or p.x > 150:
@@ -84,14 +102,14 @@ class BioSkiingOCAtariWrapper(gym.Wrapper):
             # Anti-Camping
             if abs(p.x - self.prev_x) < 0.1:
                 self.stuck_counter += 1
-                custom_reward -= 1.0 
+                custom_reward -= 1.0
             else:
                 self.stuck_counter = 0
                 custom_reward += 0.1
             
             self.prev_x = p.x
 
-        custom_reward -= 0.2
+        custom_reward -= self.time_penalty
         
         if self.stuck_counter > 100:
             truncated = True

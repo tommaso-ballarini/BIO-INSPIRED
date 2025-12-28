@@ -11,18 +11,19 @@ project_root = os.path.dirname(current_dir)
 if project_root not in sys.path:
     sys.path.append(project_root)
 
+# Import OCAtari Wrapper
 try:
-    from wrapper.wrapper_ffnn import BioSkiingOCAtariWrapper
+    from wrapper.wrapper_ffnn_dynamic import BioSkiingOCAtariWrapper
     print("BioSkiingOCAtariWrapper imported successfully.")
 except ImportError:
-    print("CRITICAL: wrapper/wrapper_ffnn.py not found.")
+    print("CRITICAL: wrapper/wrapper_ffnn_dynamic.py not found.")
     print("   Ensure the OCAtari wrapper is saved in the wrapper folder.")
     sys.exit(1)
 
 # --- CONFIGURATION ---
 
-RESULTS_DIR = os.path.join(project_root, "evolution_results", "wrapper_ffnn_run")
-CONFIG_PATH = os.path.join(project_root, "config", "config_wrapper_ffnn.txt")
+RESULTS_DIR = os.path.join(project_root, "evolution_results", "wrapper_ffnn_dynamic_run")
+CONFIG_PATH = os.path.join(project_root, "config", "config_wrapper_ffnn_dynamic.txt")
 
 def get_latest_winner():
     """Finds the latest .pkl file in the results directory."""
@@ -48,6 +49,7 @@ def visualize():
                          neat.DefaultSpeciesSet, neat.DefaultStagnation,
                          CONFIG_PATH)
     
+    # Check config inputs
     if config.genome_config.num_inputs != 9:
         print(f"WARNING: Config specifies {config.genome_config.num_inputs} inputs.")
         print("   OCAtari wrapper requires 9.")

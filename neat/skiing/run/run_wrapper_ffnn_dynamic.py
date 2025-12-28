@@ -14,30 +14,30 @@ parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
 try:
-    from wrapper.wrapper_ffnn import BioSkiingOCAtariWrapper
+    from wrapper.wrapper_ffnn_dynamic import BioSkiingOCAtariWrapper
 except ImportError:
-    print("Error: 'wrapper/wrapper_ffnn.py' not found")
+    print("Error: 'wrapper/wrapper_ffnn_dynamic.py' not found")
     sys.exit(1)
 
 # --- CONFIGURATION ---
 NUM_GENERATIONS = 150
 NUM_WORKERS = max(1, multiprocessing.cpu_count() - 2)
-CONFIG_FILENAME = "config_wrapper_ffnn.txt"
+CONFIG_FILENAME = "config_wrapper_ffnn_dynamic.txt"
+CHECKPOINT_PREFIX = "neat-checkpoint-"
 
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-RESULTS_DIR = os.path.join(parent_dir, 'evolution_results', 'wrapper_ffnn_run')
+RESULTS_DIR = os.path.join(parent_dir, 'evolution_results', 'wrapper_ffnn_dynamic_run')
 
-def eval_genome(genome, config):
+def eval_genome(genome, config, curriculum_mode="beginner"):
     """
     Function executed by each worker in parallel.
     Evaluates a single genome and returns fitness.
     """
-    # Create environment (no render needed during training)
     try:
-        env = BioSkiingOCAtariWrapper(render_mode="rgb_array")
+        env = BioSkiingOCAtariWrapper(render_mode="rgb_array", curriculum_mode=curriculum_mode)
     except:
-        env = BioSkiingOCAtariWrapper(render_mode=None)
-        
+        env = BioSkiingOCAtariWrapper(render_mode=None, curriculum_mode=curriculum_mode)
+          
     observation, info = env.reset()
     
     # Create Neural Network (Feed-Forward for memory)
@@ -47,7 +47,7 @@ def eval_genome(genome, config):
     total_reward = 0.0
     steps = 0
     
-    while not done and steps < 4000:
+    while not done and steps < 4000: 
         inputs = observation
         
         # Check input dimensions
@@ -98,7 +98,7 @@ def plot_results(stats, save_dir):
         print("Fitness graph saved.")
 
     # --- 2. SPECIATION GRAPH (FIXED) ---
-
+    
     try:
         if not stats.generation_statistics:
             print("No speciation data available.")
@@ -141,6 +141,7 @@ def plot_results(stats, save_dir):
             plt.xlabel("Generations")
             plt.ylabel("Population")
             
+            # Legend only if few species
             if len(all_species) < 15:
                 plt.legend(loc='upper left')
             
@@ -154,10 +155,9 @@ def plot_results(stats, save_dir):
         traceback.print_exc()
 
 def run_training():
-
     # 1. Setup Paths
     config_path = os.path.join(parent_dir, 'config', CONFIG_FILENAME)
-    results_dir = os.path.join(parent_dir, 'evolution_results', 'wrapper_ffnn_run')
+    results_dir = os.path.join(parent_dir, 'evolution_results', 'wrapper_ffnn_dynamic_run')
     os.makedirs(results_dir, exist_ok=True)
     
     print(f"Starting Wrapper FFNN Training")
@@ -185,10 +185,40 @@ def run_training():
     p.add_reporter(stats)
 
     # 5. Run Parallel Evolution
-    pe = neat.ParallelEvaluator(NUM_WORKERS, eval_genome)
     
-    winner = p.run(pe.evaluate, NUM_GENERATIONS)
+    class CurriculumEvaluator:
+        def __init__(self, num_workers):
+            self.num_workers = num_workers
+            self.curriculum = "beginner"
+            
+        def evaluate(self, genomes, config):
 
+            if hasattr(self, 'best_fitness'):
+                if self.best_fitness > 9000 and self.avg_fitness > 1600:
+                    if self.curriculum == "beginner":
+                        self.curriculum = "advanced"
+                        print("\n🎓 CURRICULUM UPGRADE: Advanced Mode!")
+                            
+            jobs = []
+            for genome_id, genome in genomes:
+                jobs.append((genome, config, self.curriculum))
+            
+            with multiprocessing.Pool(self.num_workers) as pool:
+                results = pool.starmap(eval_genome, jobs)
+            
+            for (genome_id, genome), fitness in zip(genomes, results):
+                genome.fitness = fitness
+            
+            fitnesses = [g.fitness for _, g in genomes]
+            self.best_fitness = max(fitnesses)
+            self.avg_fitness = np.mean(fitnesses)
+    
+    curriculum_eval = CurriculumEvaluator(NUM_WORKERS)
+    
+    print(f"\n🎿 Starting evolution with Curriculum Learning")
+    print(f"   Initial mode: {curriculum_eval.curriculum}")
+    winner = p.run(curriculum_eval.evaluate, NUM_GENERATIONS)
+    
     # 6. Save Winner
     print(f"\nBest genome found! Fitness: {winner.fitness}")
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')

@@ -17,7 +17,6 @@ compatibility_disjoint_coefficient = 1.0
 compatibility_weight_coefficient   = 0.5
 
 # --- NETWORK STRUCTURE ---
-# No hidden layers initially (Feed-Forward)
 num_hidden            = 0
 feed_forward          = True
 # Fully connected initially

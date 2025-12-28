@@ -13,7 +13,6 @@ project_root = os.path.abspath(os.path.join(script_dir, '..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-# Register ALE
 try:
     import ale_py
     gym.register_envs(ale_py)
@@ -60,10 +59,8 @@ def visualize():
                          neat.DefaultSpeciesSet, neat.DefaultStagnation,
                          config_path)
 
-    # Use raw RAM for baseline
     env = gym.make(ENV_ID, obs_type="ram", render_mode="human")
     
-    # Check if this is indeed a baseline genome (128 inputs)
     input_size = config.genome_config.num_inputs
     
     if input_size != 128:

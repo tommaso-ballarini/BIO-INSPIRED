@@ -20,7 +20,7 @@ env/
 
 
 # --- IMMAGINI E GRAFICI (Ignora ovunque) ---
-*.png
+#*.png
 *.jpg
 *.jpeg
 *.svg
@@ -49,3 +49,8 @@ history/
 bio_env/
 
 neat-checkpoint-*
+bin/*
+bin/evolution_results/pacman/checkpoint_*
+bin/evolution_results/pacman/winner_*
+bin/evolution_results/skiing/checkpoint_*
+bin/evolution_results/skiing/winner_*
