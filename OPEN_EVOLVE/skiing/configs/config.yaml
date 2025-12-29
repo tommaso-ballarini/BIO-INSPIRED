@@ -1,0 +1,83 @@
+# --- Impostazioni Generali ---
+max_iterations: 30
+random_seed: 42
+log_level: "INFO"
+
+# --- Impostazioni di Evoluzione ---
+diff_based_evolution: false  # Riscrivi la funzione intera, meglio per logiche complesse
+
+# --- Configurazione LLM (Ollama) ---
+llm:
+  models:
+    - name: "gemma3:4b" # O qwen2.5-coder:7b se ce l'hai
+      weight: 1.0
+  
+  api_base: "http://localhost:11434/v1"
+  api_key: "ollama"
+  temperature: 0.8
+  timeout: 500
+  retries: 3
+
+prompt:
+  system_message: |
+    You are a HIGH-PERFORMANCE SKIING ALGORITHM DESIGNER.
+    
+    # THE INPUT
+    You will receive a Python function `get_action(observation)` for an Atari Skiing agent.
+    
+    # THE GOAL
+    Navigate the skier through the gates (flags) as fast as possible.
+    Avoid trees and flag poles.
+    
+    # SENSORS AVAILABLE (observation vector of size 9)
+    The wrapper provides processed geometric data:
+    
+    * PLAYER INFO:
+      - obs[0]: Player X Position (Normalized: -1.0 Left, +1.0 Right, 0.0 Center).
+      - obs[1]: Skier Orientation.
+      - obs[2]: Horizontal Speed (Current X - Prev X).
+    
+    * TARGET (GATE) INFO - CRITICAL FOR MAGNET REWARD:
+      - obs[3]: TARGET DELTA X. This is the distance to the gate center.
+         -> If obs[3] > 0: Gate is to the RIGHT.
+         -> If obs[3] < 0: Gate is to the LEFT.
+         -> If obs[3] == 0: Perfect alignment.
+      - obs[4]: Distance Y to next gate.
+      - obs[5]: Gate Exists (1.0 if visible, 0.0 if not).
+    
+    * THREATS (Obstacles):
+      - obs[6]: Nearest Threat Delta X.
+      - obs[7]: Nearest Threat Dist Y.
+      - obs[8]: Threat Type (-1.0 Tree, -0.5 Flag Pole).
+    
+    # STRATEGY HINTS
+    1. ALIGNMENT (The Magnet): Your primary goal is to minimize `obs[3]` (Target Delta X). If the gate is to the right, steer right.
+    2. AVOIDANCE: If `obs[7]` is very small (close threat) and `obs[6]` indicates it's in front of you, steer away.
+    3. ACTIONS:
+       - 0: NOOP (Go straight / maintain current curve).
+       - 1: RIGHT.
+       - 2: LEFT.
+    
+    # CRITICAL RULES
+    - DO NOT return random actions.
+    - DO NOT use external libraries (except numpy/random).
+    - Return ONLY the executable Python code for the function.
+    
+  include_artifacts: true
+  num_top_programs: 1
+  num_diverse_programs: 2
+
+# --- Configurazione Database ---
+database:
+  population_size: 50
+  num_islands: 1
+  feature_dimensions:
+    - "complexity"
+    - "score"
+  feature_bins: 5
+
+# --- Configurazione Valutatore ---
+evaluator:
+  timeout: 300
+  cascade_evaluation: false
+  parallel_evaluations: 1
