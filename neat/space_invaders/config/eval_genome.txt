@@ -1,0 +1,86 @@
+IDLE PENALTY + SHOT compatibility_thresholddef eval_genome(genome, config):
+    # 1. FeedForward Network
+    net = neat.nn.FeedForwardNetwork.create(genome, config)
+    
+    try:
+        # OCAtari base
+        env = OCAtari(GAME_NAME, mode="ram", hud=False, render_mode=None)
+    except Exception:
+        return 0.0
+
+    # 2. Wrapper: Skip=4, Stack=3 (gestito nel wrapper, vedi punto 2 sotto)
+    env = SpaceInvadersColumnWrapper(env, n_columns=10, skip=4)
+    
+    observation, info = env.reset(seed=FIXED_SEED)
+    
+    # 3. Controllo Input: 32 features * 3 stack = 96
+    if len(observation) != 96:
+        print(f"⚠️ ERRORE DIMENSIONI: Atteso 96, ricevuto {len(observation)}")
+        env.close()
+        return 0.0
+
+    total_reward = 0.0
+    steps = 0
+    terminated = False
+    truncated = False
+    max_steps = 10000 
+    
+    # --- TRACKING ---
+    x_positions = [] 
+    shots_fired = 0 
+
+    while not (terminated or truncated) and steps < max_steps:
+        inputs = observation
+        outputs = net.activate(inputs)
+        action = np.argmax(outputs)
+        
+        # Tracking Spari (Azione 1 = FIRE)
+        if action == 1:
+            shots_fired += 1
+
+        observation, reward, terminated, truncated, info = env.step(action)
+        total_reward += reward
+        
+        # Tracking Posizione (RAM 28 = Player X)
+        if steps % 10 == 0:
+            try:
+                # Scendiamo al livello ALE per leggere la RAM grezza
+                player_x = env.unwrapped.ale.getRAM()[28]
+                x_positions.append(player_x)
+            except:
+                pass
+
+        steps += 1
+
+    env.close()
+
+    # --- CALCOLO FITNESS AVANZATO ---
+    
+    fitness = total_reward
+    
+    # A. Penalità Spam: -0.2 punti per ogni sparo
+    # Incentiva a sparare solo quando necessario (o almeno non a caso)
+    fitness -= (shots_fired * 0.2)
+
+    # B. Penalità Camper (Basata sul Range di movimento)
+    if len(x_positions) > 5:
+        min_x = np.min(x_positions)
+        max_x = np.max(x_positions)
+        coverage = max_x - min_x 
+        
+        # Se copre meno di 40 pixel (1/4 schermo), dimezza il punteggio
+        if coverage < 40:
+            fitness = fitness * 0.5
+        else:
+            # Bonus Esplorazione (+20 punti se ti muovi)
+            fitness += 20 
+
+    # Floor a 0.1 per evitare fitness negative o zero spaccato
+    return max(0.1, fitness)
+
+
+
+
+
+
+
