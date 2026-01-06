@@ -16,11 +16,11 @@ env/
 .idea/
 
 # --- FILE DI DATI E CHECKPOINT (Ignora ovunque) ---
-*.pkl
+#*.pkl
 
 
 # --- IMMAGINI E GRAFICI (Ignora ovunque) ---
-*.png
+#*.png
 *.jpg
 *.jpeg
 *.svg
@@ -34,7 +34,7 @@ evolution_history.csv
 
 # --- CARTELLE DI OUTPUT SPECIFICHE ---
 # Ignora le cartelle della vecchia struttura
-evolution_results/
+#evolution_results/
 evolution_history/
 history/
 
@@ -44,3 +44,13 @@ history/
 **/results/
 **/checkpoints/
 
+*.h
+*.bin
+bio_env/
+
+neat-checkpoint-*
+bin/*
+bin/evolution_results/pacman/checkpoint_*
+bin/evolution_results/pacman/winner_*
+bin/evolution_results/skiing/checkpoint_*
+bin/evolution_results/skiing/winner_*
