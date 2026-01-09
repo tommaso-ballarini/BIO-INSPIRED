@@ -8,6 +8,9 @@ import numpy as np
 import neat
 
 import gymnasium as gym
+from collections import deque
+
+
 
 # IMPORTANT: register ALE envs
 try:
@@ -23,7 +26,7 @@ except Exception:
 SCRIPT_DIR = Path(__file__).resolve().parent              # .../neat/freeway/visualize
 FREEWAY_DIR = SCRIPT_DIR.parents[0]                       # .../neat/freeway
 RESULTS_DIR = FREEWAY_DIR / "results"
-DEFAULT_CONFIG = FREEWAY_DIR / "config" / "neat_freeway_congif.txt"
+DEFAULT_CONFIG = FREEWAY_DIR / "config" / "neat_freeway_config.txt"
 
 if str(FREEWAY_DIR) not in sys.path:
     sys.path.insert(0, str(FREEWAY_DIR))
@@ -65,18 +68,23 @@ def load_stats_and_winner(run_dir: Path):
     stats_path = run_dir / "stats.pkl"
     winner_path = run_dir / "winner_genome.pkl"
 
-    if not stats_path.exists():
-        raise FileNotFoundError(f"Missing: {stats_path}")
+    # Se manca il vincitore, non possiamo fare nulla
     if not winner_path.exists():
-        raise FileNotFoundError(f"Missing: {winner_path}")
+        raise FileNotFoundError(f"Mancante file del genoma: {winner_path}")
 
-    with open(stats_path, "rb") as f:
-        stats = pickle.load(f)
+    # Carichiamo il vincitore
     with open(winner_path, "rb") as f:
         winner = pickle.load(f)
 
-    return stats, winner
+    # Carichiamo le statistiche solo se esistono
+    stats = None
+    if stats_path.exists():
+        with open(stats_path, "rb") as f:
+            stats = pickle.load(f)
+    else:
+        print(f"⚠️ Nota: {stats_path.name} non trovato. Vedrai solo l'ultimo vincitore salvato.")
 
+    return stats, winner
 
 def show_top10_and_pick_genome(stats, winner):
     # stats.most_fit_genomes: list of best genome per generation
@@ -159,14 +167,14 @@ def make_env(env_id: str, fps: int, use_wrapper: bool):
     # optional wrapper (ONLY if you trained with wrapper + num_inputs=11)
     if use_wrapper:
         # Change this import if your wrapper filename differs
-        from wrapper.freeway_wrapper import FreewayRAM11Wrapper
+        from wrapper.freeway_wrapper_prevframes import FreewayRAM11Wrapper
         env = FreewayRAM11Wrapper(env, normalize=True, mirror_last_5=True)
 
     return env
 
 
 def run_live(env_id: str, config_path: Path, genome, fps: int, max_steps: int,
-             use_wrapper: bool):
+             use_wrapper: bool, stack_frames: int):
     if not config_path.exists():
         raise FileNotFoundError(f"Config not found: {config_path}")
 
@@ -187,6 +195,15 @@ def run_live(env_id: str, config_path: Path, genome, fps: int, max_steps: int,
     total_reward = 0.0
     steps = 0
 
+    k = int(stack_frames)
+    if k < 1:
+        k = 1
+
+    obs0 = obs_to_net_input(obs)
+    buf = deque([obs0.copy() for _ in range(k)], maxlen=k)
+
+
+
     # collision heuristic (same spirit as your old script):
     # count when chicken Y decreases suddenly. Only valid for RAW RAM obs (not wrapper).
     collisions = 0
@@ -199,11 +216,24 @@ def run_live(env_id: str, config_path: Path, genome, fps: int, max_steps: int,
 
     try:
         while True:
-            out = net.activate(obs_to_net_input(obs))
+            stacked_inp = np.concatenate(list(buf), axis=0)
+
+            # Safety check: avoids wasting time with wrong config/flags
+            expected = config.genome_config.num_inputs
+            if len(stacked_inp) != expected:
+                raise RuntimeError(
+                    f"Config expects {expected} inputs, got {len(stacked_inp)} "
+                    f"(wrapper={use_wrapper}, stack_frames={k}). "
+                    "Use the matching config and flags."
+                )
+
+            out = net.activate(stacked_inp)
+
             a3 = int(np.argmax(out))           # 0/1/2 (our policy)
             action = action_map[a3]            # actual env action
 
             obs, reward, terminated, truncated, info = env.step(action)
+            buf.append(obs_to_net_input(obs))
             total_reward += float(reward)
             steps += 1
 
@@ -238,9 +268,9 @@ def main():
     parser.add_argument("--config", type=str, default=str(DEFAULT_CONFIG))
     parser.add_argument("--fps", type=int, default=30)
     parser.add_argument("--max-steps", type=int, default=5000)
-
-    # OFF by default: only enable if the genome was trained with wrapper + num_inputs=11
-    parser.add_argument("--use-wrapper", action="store_true")
+    parser.add_argument("--stack-frames", type=int, default=4,
+                    help="Number of past observations to stack (1=current only).")
+    parser.add_argument("--use-wrapper", action="store_true", default=True)
 
     # choose a run folder under results/
     parser.add_argument("--run-dir", type=str, default="", help="If set, skip menu and use this run directory")
@@ -251,7 +281,12 @@ def main():
     print(f"\nUsing run: {run_dir}")
 
     stats, winner = load_stats_and_winner(run_dir)
-    genome_to_play = show_top10_and_pick_genome(stats, winner)
+    
+    # Se non abbiamo le statistiche, non possiamo mostrare la Top 10
+    if stats is not None:
+        genome_to_play = show_top10_and_pick_genome(stats, winner)
+    else:
+        genome_to_play = winner
 
     run_live(
         env_id=args.env_id,
@@ -260,8 +295,10 @@ def main():
         fps=args.fps,
         max_steps=args.max_steps,
         use_wrapper=args.use_wrapper,
+        stack_frames=args.stack_frames
     )
 
 
 if __name__ == "__main__":
     main()
+

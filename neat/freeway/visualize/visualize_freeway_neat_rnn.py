@@ -1,12 +1,11 @@
-import os
 import sys
 import time
 import pickle
 from pathlib import Path
+from collections import deque
 
 import numpy as np
 import neat
-
 import gymnasium as gym
 
 # IMPORTANT: register ALE envs
@@ -19,11 +18,12 @@ try:
 except Exception:
     pass
 
+
 # -------- Paths (your folder layout) --------
 SCRIPT_DIR = Path(__file__).resolve().parent              # .../neat/freeway/visualize
 FREEWAY_DIR = SCRIPT_DIR.parents[0]                       # .../neat/freeway
 RESULTS_DIR = FREEWAY_DIR / "results"
-DEFAULT_CONFIG = FREEWAY_DIR / "config" / "neat_freeway_congif.txt"
+DEFAULT_CONFIG = FREEWAY_DIR / "config" / "neat_freeway_config.txt"
 
 if str(FREEWAY_DIR) not in sys.path:
     sys.path.insert(0, str(FREEWAY_DIR))
@@ -53,7 +53,6 @@ def choose_run():
         if choice.isdigit() and 0 <= int(choice) < len(runs):
             idx = int(choice)
         else:
-            # allow typing a folder name
             by_name = [r for r in runs if r.name == choice]
             if by_name:
                 return by_name[0]
@@ -79,7 +78,6 @@ def load_stats_and_winner(run_dir: Path):
 
 
 def show_top10_and_pick_genome(stats, winner):
-    # stats.most_fit_genomes: list of best genome per generation
     mg = getattr(stats, "most_fit_genomes", None)
     if not mg:
         print("No most_fit_genomes found in stats.pkl. Using winner_genome.pkl only.")
@@ -98,7 +96,6 @@ def show_top10_and_pick_genome(stats, winner):
 
     rows.sort(key=lambda x: x[1], reverse=True)
     top10 = rows[:10]
-
     best_gen, best_fit, best_genome = top10[0]
 
     print("\n--- TOP 10 (best genome per generation) ---")
@@ -111,13 +108,11 @@ def show_top10_and_pick_genome(stats, winner):
     if not choice:
         return best_genome
 
-    # choose by list id
     if choice.isdigit():
         c = int(choice)
         if 0 <= c < len(top10):
             return top10[c][2]
 
-        # choose by generation number
         gen_num = int(choice)
         if 0 <= gen_num < len(mg) and getattr(mg[gen_num], "fitness", None) is not None:
             return mg[gen_num]
@@ -127,15 +122,12 @@ def show_top10_and_pick_genome(stats, winner):
 
 
 def get_action_mapping(env):
-    """
-    If env.action_space.n == 3, we can directly use 0/1/2.
-    Otherwise map [NOOP, UP, DOWN] using action meanings.
-    """
     n = int(env.action_space.n)
     if n == 3:
         return [0, 1, 2]
 
     meanings = env.unwrapped.get_action_meanings()
+
     def idx(name):
         if name not in meanings:
             raise RuntimeError(f"Action '{name}' not in meanings: {meanings}")
@@ -146,27 +138,22 @@ def get_action_mapping(env):
 
 def obs_to_net_input(obs):
     x = np.asarray(obs, dtype=np.float32)
-    # RAM uint8 -> normalize
     if x.max() > 1.5:
         x = x / 255.0
     return x
 
 
-def make_env(env_id: str, fps: int, use_wrapper: bool):
-    # human rendering (live)
-    env = gym.make(env_id, obs_type="ram", render_mode="human")
+def make_env(env_id: str, use_wrapper: bool, render_mode: str):
+    env = gym.make(env_id, obs_type="ram", render_mode=render_mode)
 
-    # optional wrapper (ONLY if you trained with wrapper + num_inputs=11)
     if use_wrapper:
-        # Change this import if your wrapper filename differs
-        from wrapper.freeway_wrapper import FreewayRAM11Wrapper
-        env = FreewayRAM11Wrapper(env, normalize=True, mirror_last_5=True)
+        from wrapper.freeway_wrapper import FreewaySpeedWrapper
+        env = FreewaySpeedWrapper(env, normalize=True, mirror_last_5=True)
 
     return env
 
 
-def run_live(env_id: str, config_path: Path, genome, fps: int, max_steps: int,
-             use_wrapper: bool):
+def run_live_rnn(env_id: str, config_path: Path, genome, fps: int, max_steps: int, use_wrapper: bool):
     if not config_path.exists():
         raise FileNotFoundError(f"Config not found: {config_path}")
 
@@ -178,53 +165,52 @@ def run_live(env_id: str, config_path: Path, genome, fps: int, max_steps: int,
         str(config_path),
     )
 
-    net = neat.nn.FeedForwardNetwork.create(genome, config)
+    # Recurrent net (RNN)
+    net = neat.nn.RecurrentNetwork.create(genome, config)
 
-    env = make_env(env_id, fps=fps, use_wrapper=use_wrapper)
+    env = make_env(env_id, use_wrapper=use_wrapper, render_mode="human")
     action_map = get_action_mapping(env)
 
     obs, info = env.reset()
+    x = obs_to_net_input(obs)
+
+    expected = config.genome_config.num_inputs
+    if len(x) != expected:
+        raise RuntimeError(
+            f"Config expects {expected} inputs, got {len(x)}. "
+            f"(use_wrapper={use_wrapper}). Use the matching config + flags."
+        )
+
     total_reward = 0.0
     steps = 0
 
-    # collision heuristic (same spirit as your old script):
-    # count when chicken Y decreases suddenly. Only valid for RAW RAM obs (not wrapper).
-    collisions = 0
-    prev_y = None
-    if not use_wrapper:
-        prev_y = int(obs[14])
-
     print("\nSTART! (Ctrl+C to exit)")
-    print(f"Env: {env_id} | FPS: {fps} | Max steps/episode: {max_steps} | Wrapper: {use_wrapper}")
+    print(f"Env: {env_id} | FPS: {fps} | Max steps/episode: {max_steps} | Wrapper: {use_wrapper} | RNN: True")
 
     try:
         while True:
-            out = net.activate(obs_to_net_input(obs))
-            a3 = int(np.argmax(out))           # 0/1/2 (our policy)
-            action = action_map[a3]            # actual env action
+            out = net.activate(x)
+            a3 = int(np.argmax(out))
+            action = action_map[a3]
 
             obs, reward, terminated, truncated, info = env.step(action)
             total_reward += float(reward)
             steps += 1
 
-            # live collisions
-            if not use_wrapper:
-                curr_y = int(obs[14])
-                if prev_y is not None and curr_y < prev_y:
-                    collisions += 1
-                    print(f"💥 Collision! (total: {collisions})")
-                prev_y = curr_y
+            x = obs_to_net_input(obs)
 
             time.sleep(1.0 / max(1, fps))
 
             if terminated or truncated or steps >= max_steps:
-                print(f"Episode end | Return: {total_reward:.3f} | Collisions: {collisions} | Steps: {steps}")
+                print(f"Episode end | Return: {total_reward:.3f} | Steps: {steps}")
+
+                # Reset env AND reset RNN state by recreating the network
                 obs, info = env.reset()
+                net = neat.nn.RecurrentNetwork.create(genome, config)
+                x = obs_to_net_input(obs)
+
                 total_reward = 0.0
                 steps = 0
-                collisions = 0
-                if not use_wrapper:
-                    prev_y = int(obs[14])
 
     except KeyboardInterrupt:
         env.close()
@@ -233,14 +219,15 @@ def run_live(env_id: str, config_path: Path, genome, fps: int, max_steps: int,
 
 def main():
     import argparse
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--env-id", type=str, default="ALE/Freeway-v5")
     parser.add_argument("--config", type=str, default=str(DEFAULT_CONFIG))
     parser.add_argument("--fps", type=int, default=30)
     parser.add_argument("--max-steps", type=int, default=5000)
 
-    # OFF by default: only enable if the genome was trained with wrapper + num_inputs=11
-    parser.add_argument("--use-wrapper", action="store_true")
+    # wrapper ON by default (since your RNN config is for 11 inputs)
+    parser.add_argument("--use-wrapper", action="store_true", default=True)
 
     # choose a run folder under results/
     parser.add_argument("--run-dir", type=str, default="", help="If set, skip menu and use this run directory")
@@ -253,7 +240,7 @@ def main():
     stats, winner = load_stats_and_winner(run_dir)
     genome_to_play = show_top10_and_pick_genome(stats, winner)
 
-    run_live(
+    run_live_rnn(
         env_id=args.env_id,
         config_path=Path(args.config),
         genome=genome_to_play,
