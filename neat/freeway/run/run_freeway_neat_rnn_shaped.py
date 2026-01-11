@@ -10,10 +10,9 @@ from pathlib import Path
 # --- PATH CONFIGURATION ---
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
-# IMPORTANT: Config must have feed_forward = False and num_inputs = 128 (for baseline) 
-# or 22 (for wrapper)
+# Ensure config has: feed_forward = False, num_inputs = 22
 DEFAULT_CONFIG = str(PROJECT_ROOT / "config" / "neat_freeway_config.txt")
-DEFAULT_OUTDIR = PROJECT_ROOT / "results" / "neat_freeway_rnn"
+DEFAULT_OUTDIR = PROJECT_ROOT / "results" / "neat_freeway_rnn_shaped"
 
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -24,21 +23,32 @@ try:
 except Exception: pass
 
 def plot_results(stats, save_dir):
-    """ Generates Fitness and Speciation plots in English. """
+    """
+    Generates professional plots including fitness intervals (Standard Deviation).
+    """
     print(f"\nGenerating plots in: {save_dir}")
+    
     if stats.most_fit_genomes:
         gen = range(len(stats.most_fit_genomes))
         best_fit = [c.fitness for c in stats.most_fit_genomes]
         avg_fit = np.array(stats.get_fitness_mean())
-        
+        stdev_fit = np.array(stats.get_fitness_stdev())
+
         plt.figure(figsize=(12, 7))
-        plt.plot(gen, avg_fit, 'b-', label="Average Fitness", alpha=0.6)
-        plt.plot(gen, best_fit, 'r-', label="Best Fitness (Raw Score)", linewidth=2)
-        plt.title("NEAT RNN Evolution - Raw Score")
+        
+        # Plotting the Average Fitness with Standard Deviation shading (Intervals)
+        plt.plot(gen, avg_fit, 'b-', label="Average Shaped Fitness", alpha=0.8)
+        plt.fill_between(gen, avg_fit - stdev_fit, avg_fit + stdev_fit, 
+                         color='blue', alpha=0.2, label="Fitness Std Dev")
+        
+        # Plotting the Best Fitness
+        plt.plot(gen, best_fit, 'r-', label="Best Shaped Fitness", linewidth=2)
+        
+        plt.title("NEAT RNN - Shaped Fitness Evolution (with Intervals)")
         plt.xlabel("Generations")
-        plt.ylabel("Atari Points")
-        plt.legend()
-        plt.grid(True, alpha=0.3)
+        plt.ylabel("Fitness Value")
+        plt.grid(True, linestyle='--', alpha=0.5)
+        plt.legend(loc="upper left")
         plt.savefig(save_dir / "fitness_history.png")
         plt.close()
 
@@ -47,7 +57,7 @@ def plot_results(stats, save_dir):
         if species_sizes:
             plt.figure(figsize=(12, 7))
             plt.stackplot(range(len(species_sizes)), np.array(species_sizes).T)
-            plt.title("NEAT RNN Species Evolution")
+            plt.title("NEAT RNN - Speciation History")
             plt.xlabel("Generations")
             plt.ylabel("Population Size")
             plt.savefig(save_dir / "speciation_history.png")
@@ -55,8 +65,12 @@ def plot_results(stats, save_dir):
     except Exception: pass
 
 def eval_genomes_factory(env_id, max_steps, episodes_per_genome, seed_base):
+    """
+    RNN Evaluation with Shaped Fitness:
+    - Rewards: Atari Score, Max Y reached.
+    - Penalties: Collision detections.
+    """
     def eval_genomes(genomes, config):
-        # Using Speed Wrapper as default for RNN comparison
         from wrapper.freeway_wrapper import FreewaySpeedWrapper
         
         raw_env = gym.make(env_id, obs_type="ram")
@@ -66,26 +80,46 @@ def eval_genomes_factory(env_id, max_steps, episodes_per_genome, seed_base):
         action_map = [meanings.index("NOOP"), meanings.index("UP"), meanings.index("DOWN")]
 
         for genome_id, genome in genomes:
-            # IMPORTANT: For RNN we use RecurrentNetwork instead of FeedForwardNetwork
+            # Create a RECURRENT network
             net = neat.nn.RecurrentNetwork.create(genome, config)
-            scores = []
+            fitness_history = []
 
             for ep in range(episodes_per_genome):
                 seed = seed_base + genome_id + ep
                 obs, _ = env.reset(seed=seed)
-                total_game_score = 0.0
+                
+                total_atari_score = 0.0
+                max_y_reached = 0.0
+                collision_count = 0
+                prev_y = obs[0] # Initial normalized Y
 
                 for t in range(max_steps):
-                    # RNN maintains state between activations
-                    action_idx = np.argmax(net.activate(obs))
+                    # RNN activation (retains internal state)
+                    outputs = net.activate(obs)
+                    action_idx = np.argmax(outputs)
+                    
                     obs, reward, terminated, truncated, _ = env.step(action_map[action_idx])
-                    total_game_score += float(reward)
+                    
+                    current_y = obs[0]
+                    total_atari_score += float(reward)
 
+                    # Progress Tracking
+                    if current_y > max_y_reached:
+                        max_y_reached = current_y
+                    
+                    # Collision Heuristic (Normalized Y drops significantly)
+                    if current_y < prev_y - 0.05:
+                        collision_count += 1
+                    
+                    prev_y = current_y
                     if terminated or truncated: break
 
-                scores.append(total_game_score)
+                # SHAPED FITNESS CALCULATION
+                # Weights: Score (50.0), Progress (10.0), Collision (-0.5)
+                shaped_fit = (total_atari_score * 50.0) + (max_y_reached * 10.0) - (collision_count * 0.5)
+                fitness_history.append(shaped_fit)
 
-            genome.fitness = np.mean(scores)
+            genome.fitness = np.mean(fitness_history)
         env.close()
 
     return eval_genomes
@@ -102,10 +136,10 @@ def main():
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
 
-    # RNNs usually need more time to stabilize their internal memory
     eval_func = eval_genomes_factory("ALE/Freeway-v5", 1500, 1, 42)
     
     try:
+        # Evolution for 50 generations
         winner = p.run(eval_func, n=50)
     except KeyboardInterrupt:
         winner = p.best_genome
@@ -113,7 +147,7 @@ def main():
     with open(out_path / "winner.pkl", "wb") as f: pickle.dump(winner, f)
     with open(out_path / "stats.pkl", "wb") as f: pickle.dump(stats, f)
     plot_results(stats, out_path)
-    print(f"\nRNN Training Complete. Results: {out_path}")
+    print(f"\nRNN Shaped Training Finished. Results in: {out_path}")
 
 if __name__ == "__main__":
     main()

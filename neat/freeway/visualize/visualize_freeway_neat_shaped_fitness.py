@@ -21,7 +21,7 @@ RESULTS_DIR = PROJECT_ROOT / "results"
 
 def choose_run():
     folders = sorted([f for f in RESULTS_DIR.iterdir() if f.is_dir()], reverse=True)
-    print("\n--- SELECT RNN RUN ---")
+    print("\n--- SELECT SHAPED FITNESS RUN ---")
     for i, f in enumerate(folders): print(f"[{i}] {f.name}")
     idx = input("\nIndex (default 0): ").strip()
     return folders[int(idx) if idx.isdigit() else 0]
@@ -39,22 +39,23 @@ def run_visualize(run_path):
     env = gym.make("ALE/Freeway-v5", obs_type="ram", render_mode="human")
     env = FreewaySpeedWrapper(env, normalize=True, mirror_last_5=True)
     
-    # IMPORTANT: Create RecurrentNetwork
-    net = neat.nn.RecurrentNetwork.create(winner, config)
+    net = neat.nn.FeedForwardNetwork.create(winner, config)
     meanings = env.unwrapped.get_action_meanings()
     action_map = [meanings.index("NOOP"), meanings.index("UP"), meanings.index("DOWN")]
 
-    print(f"\n--- VISUALIZING RNN WINNER: {run_dir.name} ---")
-    obs, _ = env.reset(seed=42)
+    print(f"\n--- VISUALIZING WINNER: {run_dir.name} ---")
+    obs, _ = env.reset(seed=42) # Fixed seed
     done = False
+    score = 0
     
     while not done:
-        # RNN update: the network "remembers" previous activations
         action = action_map[np.argmax(net.activate(obs))]
         obs, reward, terminated, truncated, _ = env.step(action)
+        score += reward
         done = terminated or truncated
         time.sleep(1/60.0)
 
+    print(f"Final Atari Score: {score}")
     env.close()
 
 if __name__ == "__main__":

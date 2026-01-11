@@ -10,21 +10,21 @@ from pathlib import Path
 # --- PATH CONFIGURATION ---
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
-# IMPORTANT: Config must have feed_forward = False and num_inputs = 128 (for baseline) 
-# or 22 (for wrapper)
+# Ensure config has num_inputs = 22
 DEFAULT_CONFIG = str(PROJECT_ROOT / "config" / "neat_freeway_config.txt")
-DEFAULT_OUTDIR = PROJECT_ROOT / "results" / "neat_freeway_rnn"
+DEFAULT_OUTDIR = PROJECT_ROOT / "results" / "neat_freeway_shaped_fitness"
 
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+# Force ALE Registration
 try:
     import ale_py
     gym.register_envs(ale_py)
 except Exception: pass
 
 def plot_results(stats, save_dir):
-    """ Generates Fitness and Speciation plots in English. """
+    """ Generates performance and speciation plots in English. """
     print(f"\nGenerating plots in: {save_dir}")
     if stats.most_fit_genomes:
         gen = range(len(stats.most_fit_genomes))
@@ -32,31 +32,22 @@ def plot_results(stats, save_dir):
         avg_fit = np.array(stats.get_fitness_mean())
         
         plt.figure(figsize=(12, 7))
-        plt.plot(gen, avg_fit, 'b-', label="Average Fitness", alpha=0.6)
-        plt.plot(gen, best_fit, 'r-', label="Best Fitness (Raw Score)", linewidth=2)
-        plt.title("NEAT RNN Evolution - Raw Score")
+        plt.plot(gen, avg_fit, 'b-', label="Average Shaped Fitness", alpha=0.6)
+        plt.plot(gen, best_fit, 'r-', label="Best Shaped Fitness", linewidth=2)
+        plt.title("NEAT Evolution - Shaped Fitness (Score + Y + Collision Penalty)")
         plt.xlabel("Generations")
-        plt.ylabel("Atari Points")
+        plt.ylabel("Fitness Value")
         plt.legend()
         plt.grid(True, alpha=0.3)
         plt.savefig(save_dir / "fitness_history.png")
         plt.close()
 
-    try:
-        species_sizes = stats.get_species_sizes()
-        if species_sizes:
-            plt.figure(figsize=(12, 7))
-            plt.stackplot(range(len(species_sizes)), np.array(species_sizes).T)
-            plt.title("NEAT RNN Species Evolution")
-            plt.xlabel("Generations")
-            plt.ylabel("Population Size")
-            plt.savefig(save_dir / "speciation_history.png")
-            plt.close()
-    except Exception: pass
-
 def eval_genomes_factory(env_id, max_steps, episodes_per_genome, seed_base):
+    """
+    Evaluation factory with Fitness Shaping.
+    Rewards: Atari Points (High), Chicken Y (Continuous), Collision (Penalty).
+    """
     def eval_genomes(genomes, config):
-        # Using Speed Wrapper as default for RNN comparison
         from wrapper.freeway_wrapper import FreewaySpeedWrapper
         
         raw_env = gym.make(env_id, obs_type="ram")
@@ -66,26 +57,47 @@ def eval_genomes_factory(env_id, max_steps, episodes_per_genome, seed_base):
         action_map = [meanings.index("NOOP"), meanings.index("UP"), meanings.index("DOWN")]
 
         for genome_id, genome in genomes:
-            # IMPORTANT: For RNN we use RecurrentNetwork instead of FeedForwardNetwork
-            net = neat.nn.RecurrentNetwork.create(genome, config)
-            scores = []
+            net = neat.nn.FeedForwardNetwork.create(genome, config)
+            fitness_history = []
 
             for ep in range(episodes_per_genome):
                 seed = seed_base + genome_id + ep
                 obs, _ = env.reset(seed=seed)
-                total_game_score = 0.0
+                
+                total_atari_score = 0.0
+                max_y_reached = 0.0
+                collisions = 0
+                
+                # Feature index 0 is normalized Y (0.0 = start, 1.0 = goal)
+                prev_y = obs[0] 
 
                 for t in range(max_steps):
-                    # RNN maintains state between activations
                     action_idx = np.argmax(net.activate(obs))
                     obs, reward, terminated, truncated, _ = env.step(action_map[action_idx])
-                    total_game_score += float(reward)
+                    
+                    current_y = obs[0]
+                    total_atari_score += float(reward)
 
+                    # Update max Y reached (progress reward)
+                    if current_y > max_y_reached:
+                        max_y_reached = current_y
+                    
+                    # Detect collision (Y drops significantly)
+                    if current_y < prev_y - 0.05: # Threshold for collision detection
+                        collisions += 1
+                    
+                    prev_y = current_y
                     if terminated or truncated: break
 
-                scores.append(total_game_score)
+                # --- FITNESS SHAPING LOGIC ---
+                # 1. Big reward for each point (Atari Score)
+                # 2. Medium reward for the highest Y achieved (encourages moving up)
+                # 3. Small penalty for collisions (encourages dodging)
+                shaped_fitness = (total_atari_score * 20.0) + (max_y_reached * 10.0) - (collisions * 0.5)
+                fitness_history.append(shaped_fitness)
 
-            genome.fitness = np.mean(scores)
+            # Assign average fitness across episodes
+            genome.fitness = np.mean(fitness_history)
         env.close()
 
     return eval_genomes
@@ -102,10 +114,10 @@ def main():
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
 
-    # RNNs usually need more time to stabilize their internal memory
     eval_func = eval_genomes_factory("ALE/Freeway-v5", 1500, 1, 42)
     
     try:
+        # Shaped fitness usually converges much faster (30-50 generations)
         winner = p.run(eval_func, n=50)
     except KeyboardInterrupt:
         winner = p.best_genome
@@ -113,7 +125,7 @@ def main():
     with open(out_path / "winner.pkl", "wb") as f: pickle.dump(winner, f)
     with open(out_path / "stats.pkl", "wb") as f: pickle.dump(stats, f)
     plot_results(stats, out_path)
-    print(f"\nRNN Training Complete. Results: {out_path}")
+    print(f"\nTraining Complete. Results in: {out_path}")
 
 if __name__ == "__main__":
     main()
