@@ -1,232 +1,161 @@
 import sys
 import os
 import importlib.util
-import json
-import shutil
 import time
-import csv
+import re
+import random
 import gymnasium as gym
-import numpy as np
 from pathlib import Path
 
-# --- SETUP PERCORSI ---
+# --- SETUP IMPORT WRAPPER ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
 wrapper_dir = os.path.abspath(os.path.join(current_dir, '..', 'wrapper'))
 sys.path.append(wrapper_dir)
 
-# --- IMPORT WRAPPER ---
 try:
-    from freeway_wrapper import FreewayOCAtariWrapper
+    from freeway_wrapper import FreewayEvoWrapper
 except ImportError as e:
-    print(f"ERRORE CRITICO: Impossibile importare il wrapper da {wrapper_dir}")
-    print(f"Dettaglio: {e}")
+    print(f"Errore Import Wrapper: {e}")
     sys.exit(1)
 
-# Importiamo EvaluationResult
-try:
-    from openevolve.evaluation_result import EvaluationResult
-except ImportError:
-    print("ERRORE: Libreria 'openevolve' non trovata.")
-    sys.exit(1)
+from openevolve.evaluation_result import EvaluationResult
 
-
-# --- CONFIGURAZIONE COSTANTI ---
-ENV_NAME = 'Freeway-v4'
-MAX_STEPS_PER_GAME = 1000 
+# --- CONFIGURAZIONE ---
+ENV_NAME = 'ALE/Freeway-v5'
+MAX_STEPS_PER_GAME = 2000 # Freeway è basato sul tempo (2 min e rotti), ma limitiamo gli step
 NUM_GAMES_PER_EVAL = 3 
+EVAL_SEEDS = [42, 101, 999]
 
-# Parametri Fitness Aggiornati
-REWARD_FACTOR = 100.0         # Punti per aver attraversato la strada
-COLLISION_PENALTY = 0.2       # RIDOTTO: Piccola penalità, non blocca l'apprendimento
-PROGRESS_FACTOR = 50.0        # NUOVO: Punti extra basati sull'altezza massima raggiunta
-IDLE_PENALTY_PER_FRAME = 0.1  
-MAX_IDLE_FRAMES = 60          
-
-# Setup History
-experiment_root = os.path.abspath(os.path.join(current_dir, '..'))
-HISTORY_DIR = Path(experiment_root) / 'history'
-HISTORY_CSV = HISTORY_DIR / 'fitness_history.csv'
-HISTORY_DIR.mkdir(parents=True, exist_ok=True)
-
-if not HISTORY_CSV.exists():
-    with open(HISTORY_CSV, 'w', newline='') as f:
-        # Aggiungiamo max_y al log per curiosità
-        csv.writer(f).writerow(["timestamp", "score", "collisions", "idle_penalty", "max_y", "filename"])
-
-# Registrazione ALE
-import ale_py
-gym.register_envs(ale_py)
-
-# --- FUNZIONI DI SUPPORTO ---
-
-def save_checkpoint(program_path, score, collisions, idle_penalty, max_y):
-    """Salva una copia dell'agente nella cartella history."""
-    timestamp = int(time.time() * 1000)
-    dest_name = f"attempt_{timestamp}_score_{score:.1f}.py"
-    dest_path = HISTORY_DIR / dest_name
-    try:
-        shutil.copy(program_path, dest_path)
-        with open(HISTORY_CSV, 'a', newline='') as f:
-            csv.writer(f).writerow([timestamp, score, collisions, idle_penalty, max_y, dest_name])
-    except Exception as e:
-        print(f"Errore salvataggio checkpoint: {e}")
-
-def run_custom_simulation(agent_func):
-    """
-    Esegue una partita. Restituisce: reward, collisions, idle_pen, max_y
-    """
-    try:
-        env = gym.make(ENV_NAME, obs_type='ram', render_mode=None)
-    except:
-        env = gym.make('ALE/Freeway-v5', obs_type='ram', render_mode=None)
-
-    env = FreewayOCAtariWrapper(env)
-
-    observation, _ = env.reset()
-    total_reward = 0.0
-    collisions = 0
-    idle_penalty_total = 0.0
-    
-    # max_y_reached: traccia il punto più alto raggiunto (0.0 - 1.0)
-    max_y_reached = 0.0
-    
-    # obs[0] è la Y del pollo
-    prev_y = observation[0] 
-    
-    idle_counter = 0
-    last_action = None
-    same_action_count = 0
-
-    for _ in range(MAX_STEPS_PER_GAME):
-        
-        # 1. DECISIONE AGENTE
+def log_to_csv(score):
+    csv_path = os.environ.get("FREEWAY_HISTORY_PATH", "history_backup.csv")
+    for _ in range(10):
         try:
-            action = agent_func(observation)
-            if isinstance(action, (list, tuple, np.ndarray)):
-                action = action[0]
-            action = int(action)
-        except Exception:
-            action = 1 
-        
-        if action not in (0, 1, 2): action = 1
-
-        # Check anti-loop
-        if last_action is not None and action == last_action:
-            same_action_count += 1
-        else:
-            last_action = action
-            same_action_count = 1
-        
-        # 2. STEP
-        observation, reward, terminated, truncated, _ = env.step(action)
-        
-        # 3. ANALISI
-        curr_y = observation[0]
-        
-        # Aggiorna record altezza
-        if curr_y > max_y_reached:
-            max_y_reached = curr_y
-
-        # Collisione (Y scende)
-        if curr_y < (prev_y - 0.05):
-            collisions += 1
-            idle_counter = 0
-        # Immobilità
-        elif abs(curr_y - prev_y) < 0.001:
-            idle_counter += 1
-            if idle_counter > MAX_IDLE_FRAMES:
-                idle_penalty_total += IDLE_PENALTY_PER_FRAME
-        else:
-            idle_counter = 0
-
-        prev_y = curr_y
-        total_reward += reward
-
-        if same_action_count > 600: 
+            file_exists = os.path.exists(csv_path)
+            with open(csv_path, 'a', encoding='utf-8') as f:
+                if not file_exists:
+                    f.write("timestamp,score\n")
+                f.write(f"{time.time()},{score}\n")
             break
-        if terminated or truncated:
-            break
+        except PermissionError:
+            time.sleep(random.random() * 0.1)
 
-    env.close()
-    # Ritorna anche max_y_reached
-    return total_reward, collisions, idle_penalty_total, max_y_reached
-
-
-# --- FUNZIONE PRINCIPALE: EVALUATE ---
-def evaluate(program_path: str):
+def save_interesting_agent(code_string, score):
     try:
-        spec = importlib.util.spec_from_file_location("evolved_agent", program_path)
+        csv_path = os.environ.get("FREEWAY_HISTORY_PATH", None)
+        if csv_path:
+            results_dir = os.path.dirname(csv_path)
+            save_dir = os.path.join(results_dir, "interesting_agents")
+        else:
+            save_dir = "interesting_agents_backup"
+            
+        os.makedirs(save_dir, exist_ok=True)
+        
+        score_int = int(score)
+        prefix = f"agent_{score_int}_pts_"
+        existing_agents = [f for f in os.listdir(save_dir) if f.startswith(prefix)]
+        if len(existing_agents) >= 2: return
+
+        filename = f"{prefix}{int(time.time()*1000)}.py"
+        filepath = os.path.join(save_dir, filename)
+        
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(code_string)
+            
+    except Exception as e:
+        print(f"Errore salvataggio agente: {e}")
+
+def clean_llm_code(code_string: str) -> str:
+    pattern = r"```(?:python)?\s*(.*?)```"
+    match = re.search(pattern, code_string, re.DOTALL)
+    if match: return match.group(1).strip()
+    return code_string.strip()
+
+def run_custom_simulation(action_function, specific_seed=None, visualization=False):
+    render_mode = "human" if visualization else None
+    try:
+        # Nota: obs_type='ram' è necessario per il FreewaySpeedWrapper
+        raw_env = gym.make(ENV_NAME, obs_type="ram", render_mode=render_mode)
+        env = FreewayEvoWrapper(raw_env)
+    except Exception as e:
+        print(f"Env create error: {e}")
+        return 0.0
+
+    if specific_seed is None:
+        current_seed = random.randint(100, 1000000)
+    else:
+        current_seed = specific_seed
+    
+    observation, info = env.reset(seed=current_seed)
+    
+    total_reward = 0.0
+    steps = 0
+    terminated = False
+    truncated = False
+
+    try:
+        while not (terminated or truncated) and steps < MAX_STEPS_PER_GAME:
+            try:
+                # Azioni mappate: 0 NOOP, 1 UP, 2 DOWN
+                action = int(action_function(observation))
+            except Exception:
+                return -500.0 # Penalità per crash codice
+
+            observation, reward, terminated, truncated, info = env.step(action)
+            total_reward += reward
+            steps += 1
+            if visualization: time.sleep(0.015)
+    except Exception as e:
+        return -500.0
+    finally:
+        env.close()
+
+    return total_reward
+
+def evaluate(input_data: str) -> EvaluationResult:
+    code_to_exec = input_data
+    if os.path.exists(input_data) and input_data.endswith('.py'):
+        try:
+            with open(input_data, 'r', encoding='utf-8') as f:
+                code_to_exec = f.read()
+        except Exception:
+            return EvaluationResult(metrics={'combined_score': -9999.0})
+
+    cleaned_code = clean_llm_code(code_to_exec)
+
+    try:
+        spec = importlib.util.spec_from_loader("agent_module", loader=None)
         agent_module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(agent_module)
+        exec(cleaned_code, agent_module.__dict__)
         
         if not hasattr(agent_module, 'get_action'):
-            raise ValueError("Funzione 'get_action' non trovata.")
-            
-        agent_func = agent_module.get_action
+             log_to_csv(-9999.0)
+             return EvaluationResult(metrics={'combined_score': -9999.0})
+             
+        get_action_func = agent_module.get_action
+    except Exception:
+        log_to_csv(-9999.0) 
+        return EvaluationResult(metrics={'combined_score': -9999.0})
 
-        avg_fitness = 0.0
-        avg_collisions = 0.0
-        avg_idle_penalty = 0.0
-        avg_max_y = 0.0
+    total_score = 0
+    for i in range(NUM_GAMES_PER_EVAL):
+        score = run_custom_simulation(action_function=get_action_func, visualization=False)
+        total_score += score
 
-        for _ in range(NUM_GAMES_PER_EVAL):
-            # Unpack dei 4 valori
-            g_reward, n_coll, idle_pen, max_y = run_custom_simulation(agent_func)
+    avg_score = total_score / NUM_GAMES_PER_EVAL
+    log_to_csv(avg_score)
 
-            # --- NUOVA LOGICA FITNESS ---
-            # 1. Base: Reward del gioco (attraversamento completo)
-            score = g_reward * REWARD_FACTOR
-            
-            # 2. Progress: Premia l'avanzamento anche se muore
-            # Se arriva a metà (0.5), prende 25 punti. Incentiva il movimento.
-            score += (max_y * PROGRESS_FACTOR)
-            
-            # 3. Collisioni: Penalità leggera
-            # Puniamo poco (-2) così capisce che muoversi è meglio che stare fermi
-            score -= (n_coll * COLLISION_PENALTY)
-            
-            # 4. Idleness: Penalità standard
-            score -= idle_pen
-            
-            # 5. Penalità extra PIGRIZIA (se non si muove dalla base)
-            if max_y < 0.05:
-                score -= 50.0
+    # Salviamo se fa un punteggio decente (considerando il reward shaping, > 50 è buono)
+    if avg_score > 50.0:
+        save_interesting_agent(cleaned_code, avg_score)
 
-            avg_fitness += score
-            avg_collisions += n_coll
-            avg_idle_penalty += idle_pen
-            avg_max_y += max_y
-
-        final_score = avg_fitness / NUM_GAMES_PER_EVAL
-        final_collisions = avg_collisions / NUM_GAMES_PER_EVAL
-        final_idle = avg_idle_penalty / NUM_GAMES_PER_EVAL
-        final_max_y = avg_max_y / NUM_GAMES_PER_EVAL
-
-        save_checkpoint(program_path, final_score, final_collisions, final_idle, final_max_y)
-
-        return EvaluationResult(
-            metrics={
-                "combined_score": final_score,
-                "score": final_score,
-                "collisions": final_collisions,
-                "idle_penalty": final_idle,
-                "max_y": final_max_y,
-                "correctness": 1.0,
-            }
-        )
-
-    except Exception as e:
-        print(f"EVALUATION ERROR: {e}")
-        save_checkpoint(program_path, -1000.0, 0, 0, 0)
-        return EvaluationResult(
-            metrics={"combined_score": -1000.0, "score": -1000.0, "correctness": 0.0},
-            artifacts={"stderr": str(e)}
-        )
+    return EvaluationResult(metrics={'combined_score': avg_score})
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        result = evaluate(sys.argv[1])
-        print(json.dumps(result.to_dict(), indent=2))
-    else:
-        print("Uso: python evaluator.py <path_to_agent_script.py>")
-        sys.exit(1)
+    try:
+        import initial_agent
+        print("Testing initial_agent (Validation Run)...")
+        TEST_SEED = 42 
+        score = run_custom_simulation(initial_agent.get_action, specific_seed=TEST_SEED, visualization=True)
+        print(f"Seed Agent Score (Seed {TEST_SEED}): {score}")
+    except ImportError:
+        print("❌ Errore: initial_agent.py non trovato!")

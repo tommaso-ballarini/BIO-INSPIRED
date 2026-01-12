@@ -22,8 +22,9 @@ from openevolve.evaluation_result import EvaluationResult
 # --- CONFIGURAZIONE ---
 ENV_NAME = 'ALE/Skiing-v5'
 MAX_STEPS_PER_GAME = 2000
-NUM_GAMES_PER_EVAL = 5 # Media su 3 partite diverse
-EVAL_SEEDS = [3, 1, 22] # Semi deterministici per la riproducibilità
+# RICHIESTA: Una sola partita sul seed 42 (quello dove il seed_agent faceva 8000)
+NUM_GAMES_PER_EVAL = 1 
+EVAL_SEEDS = [42] 
 
 def log_to_csv(score):
     """Scrive il risultato su un CSV condiviso."""
@@ -41,11 +42,10 @@ def log_to_csv(score):
 
 def save_interesting_agent(code_string, score):
     """
-    Salva il codice dell'agente se è interessante.
-    LOGICA ANTI-CLONI: Non salva se esistono già >= 2 agenti con lo stesso score intero.
+    Salva il codice dell'agente se supera la soglia.
+    LOGICA ANTI-CLONI: Evita di salvare duplicati dello stesso punteggio.
     """
     try:
-        # Recupera il percorso della history per capire dove salvare
         csv_path = os.environ.get("SKIING_HISTORY_PATH", None)
         if csv_path:
             results_dir = os.path.dirname(csv_path)
@@ -62,11 +62,12 @@ def save_interesting_agent(code_string, score):
         # Conta quanti file esistono già con questo punteggio esatto
         existing_agents = [f for f in os.listdir(save_dir) if f.startswith(prefix)]
         
-        # Se abbiamo già 2 o più agenti con questo score, IGNORA il salvataggio
-        if len(existing_agents) >= 2:
+        # Se esiste già UN agente con questo score esatto, NON salvare.
+        # (Modificato a >= 1 per essere più severo sui cloni, dato che cerchiamo >8000)
+        if len(existing_agents) >= 1:
             return
 
-        # Nome file con score e timestamp univoco
+        # Nome file univoco
         filename = f"{prefix}{int(time.time()*1000)}.py"
         filepath = os.path.join(save_dir, filename)
         
@@ -84,11 +85,10 @@ def clean_llm_code(code_string: str) -> str:
         return match.group(1).strip()
     return code_string.strip()
 
-def run_custom_simulation(action_function, specific_seed=None, visualization=False):
+def run_custom_simulation(action_function, game_idx=0, visualization=False):
     """
     Esegue una simulazione singola.
-    Se specific_seed è None, usa un random seed > 100 (Training).
-    Se specific_seed è impostato, usa quello (Test/Validation).
+    Usa sempre il seed 42 in questa configurazione.
     """
     render_mode = "human" if visualization else None
     try:
@@ -96,17 +96,10 @@ def run_custom_simulation(action_function, specific_seed=None, visualization=Fal
     except Exception:
         return 0.0
 
-    # --- LOGICA RANDOM SEED (TRAINING vs TEST) ---
-    if specific_seed is None:
-        # Training: Seed casuale ma "sicuro" (lontano dai primi 100 usati per i test)
-        current_seed = random.randint(100, 1000000)
-    else:
-        # Test: Seed specifico richiesto (es. 42)
-        current_seed = specific_seed
+    # Usa il seed dalla lista (che contiene solo 42)
+    current_seed = EVAL_SEEDS[game_idx % len(EVAL_SEEDS)]
     
-    # print(f"DEBUG: Using seed {current_seed}") 
     observation, info = env.reset(seed=current_seed)
-    
     total_reward = 0.0
     steps = 0
     terminated = False
@@ -131,63 +124,54 @@ def run_custom_simulation(action_function, specific_seed=None, visualization=Fal
     return total_reward
 
 def evaluate(input_data: str) -> EvaluationResult:
-    # 1. GESTIONE INPUT E CARICAMENTO CODICE
+    # 1. GESTIONE INPUT
     code_to_exec = input_data
     if os.path.exists(input_data) and input_data.endswith('.py'):
         try:
             with open(input_data, 'r', encoding='utf-8') as f:
                 code_to_exec = f.read()
         except Exception:
-            log_to_csv(-9999.0)
             return EvaluationResult(metrics={'combined_score': -9999.0})
 
-    # 2. PULIZIA
+    # 2. PULIZIA E CARICAMENTO
     cleaned_code = clean_llm_code(code_to_exec)
-
-    # 3. COMPILAZIONE
+    
     try:
         spec = importlib.util.spec_from_loader("agent_module", loader=None)
         agent_module = importlib.util.module_from_spec(spec)
         exec(cleaned_code, agent_module.__dict__)
         
         if not hasattr(agent_module, 'get_action'):
-             log_to_csv(-9999.0)
              return EvaluationResult(metrics={'combined_score': -9999.0})
              
         get_action_func = agent_module.get_action
 
     except Exception:
-        log_to_csv(-9999.0) 
         return EvaluationResult(metrics={'combined_score': -9999.0})
 
-    # 4. SIMULAZIONE (RANDOM TRAINING)
+    # 3. SIMULAZIONE (Una sola partita: Seed 42)
     total_score = 0
     for i in range(NUM_GAMES_PER_EVAL):
-        # Non passiamo 'game_idx' o 'specific_seed', così ne pesca uno random > 100
-        score = run_custom_simulation(action_function=get_action_func, visualization=False)
+        score = run_custom_simulation(get_action_func, game_idx=i, visualization=False)
         total_score += score
 
     avg_score = total_score / NUM_GAMES_PER_EVAL
     
-    # 5. LOGGING
+    # 4. LOGGING
     log_to_csv(avg_score)
 
-    # 6. SALVATAGGIO CON NUOVA SOGLIA
-    # Salva solo se supera 1000 punti (miglioramenti rispetto al seed_agent)
-    if avg_score > 3000.0:
+    # 5. SALVATAGGIO (Solo se > 8000)
+    if avg_score > 7150.0:
         save_interesting_agent(cleaned_code, avg_score)
 
     return EvaluationResult(metrics={'combined_score': avg_score})
 
 if __name__ == "__main__":
+    # --- RICHIESTA: Testiamo il seed_agent ---
     try:
-        import initial_agent
-        print("Testing initial_agent (Validation Run)...")
-        
-        # QUI usiamo un seed riservato (< 100) per il test visivo
-        TEST_SEED = 42 
-        score = run_custom_simulation(initial_agent.get_action, specific_seed=TEST_SEED, visualization=True)
-        
-        print(f"Seed Agent Score (Seed {TEST_SEED}): {score}")
+        import seed_agent
+        print("Testing seed_agent (Seed 42)...")
+        score = run_custom_simulation(seed_agent.get_action, game_idx=0, visualization=True)
+        print(f"Seed Agent Fitness: {score}")
     except ImportError:
-        print("❌ Errore: initial_agent.py non trovato!")
+        print("⚠️ seed_agent.py non trovato, assicurati che sia in src/")

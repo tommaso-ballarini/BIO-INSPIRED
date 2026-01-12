@@ -1,5 +1,5 @@
 # --- Impostazioni Generali ---
-max_iterations: 30
+max_iterations: 6000
 random_seed: 42
 log_level: "INFO"
 
@@ -9,7 +9,7 @@ diff_based_evolution: false  # Riscrivi la funzione intera, meglio per logiche c
 # --- Configurazione LLM (Ollama) ---
 llm:
   models:
-    - name: "gemma3:4b" # O qwen2.5-coder:7b se ce l'hai
+    - name: "qwen2.5-coder:7b" 
       weight: 1.0
   
   api_base: "http://localhost:11434/v1"
@@ -62,22 +62,25 @@ prompt:
     - DO NOT return random actions.
     - DO NOT use external libraries (except numpy/random).
     - Return ONLY the executable Python code for the function.
+
+    # GENERALIZATION WARNING
+    - The ski course CHANGES every time. DO NOT memorize hardcoded turns (e.g. "turn right at step 50").
+    - You MUST rely on `obs[3]` (Target Delta X) and `obs[6]` (Threats) to react dynamically.
+  
     
-  include_artifacts: true
-  num_top_programs: 1
-  num_diverse_programs: 2
+
 
 # --- Configurazione Database ---
 database:
-  population_size: 50
+  population_size: 2000
   num_islands: 1
   feature_dimensions:
     - "complexity"
     - "score"
-  feature_bins: 5
+  feature_bins: 40
 
 # --- Configurazione Valutatore ---
 evaluator:
   timeout: 300
   cascade_evaluation: false
-  parallel_evaluations: 1
+  parallel_evaluations: 24

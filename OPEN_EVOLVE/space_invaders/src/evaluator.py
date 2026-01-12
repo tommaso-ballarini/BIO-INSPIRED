@@ -4,7 +4,9 @@ import importlib.util
 import time
 import re
 import random
+import numpy as np
 from pathlib import Path
+from ocatari.core import OCAtari
 
 # --- SETUP IMPORT WRAPPER ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -12,22 +14,25 @@ wrapper_dir = os.path.abspath(os.path.join(current_dir, '..', 'wrapper'))
 sys.path.append(wrapper_dir)
 
 try:
-    from skiing_wrapper import SkiingOCAtariWrapper
-except ImportError as e:
-    print(f"Errore Import Wrapper: {e}")
-    sys.exit(1)
+    from si_wrapper import SpaceInvadersEgocentricWrapper
+except ImportError:
+    try:
+        from wrapper_si_ego import SpaceInvadersEgocentricWrapper
+    except ImportError as e:
+        print(f"❌ Errore Import Wrapper: {e}")
+        sys.exit(1)
 
 from openevolve.evaluation_result import EvaluationResult
 
 # --- CONFIGURAZIONE ---
-ENV_NAME = 'ALE/Skiing-v5'
-MAX_STEPS_PER_GAME = 2000
-NUM_GAMES_PER_EVAL = 5 # Media su 3 partite diverse
-EVAL_SEEDS = [3, 1, 22] # Semi deterministici per la riproducibilità
+ENV_NAME = 'ALE/SpaceInvaders-v5'
+MAX_STEPS_PER_GAME = 4000
+NUM_GAMES_PER_EVAL = 3
+EVAL_SEEDS = [42, 43, 44]
 
 def log_to_csv(score):
     """Scrive il risultato su un CSV condiviso."""
-    csv_path = os.environ.get("SKIING_HISTORY_PATH", "history_backup.csv")
+    csv_path = os.environ.get("SI_HISTORY_PATH", "history_si_backup.csv")
     for _ in range(10):
         try:
             file_exists = os.path.exists(csv_path)
@@ -41,12 +46,11 @@ def log_to_csv(score):
 
 def save_interesting_agent(code_string, score):
     """
-    Salva il codice dell'agente se è interessante.
-    LOGICA ANTI-CLONI: Non salva se esistono già >= 2 agenti con lo stesso score intero.
+    Salva il codice dell'agente se supera una certa soglia.
+    LIMITAZIONE: Non salva più di 2 agenti con lo stesso punteggio intero.
     """
     try:
-        # Recupera il percorso della history per capire dove salvare
-        csv_path = os.environ.get("SKIING_HISTORY_PATH", None)
+        csv_path = os.environ.get("SI_HISTORY_PATH", None)
         if csv_path:
             results_dir = os.path.dirname(csv_path)
             save_dir = os.path.join(results_dir, "interesting_agents")
@@ -57,16 +61,15 @@ def save_interesting_agent(code_string, score):
         
         # --- LOGICA ANTI-CLONI ---
         score_int = int(score)
+        # Cerca file che iniziano con "agent_{score}_pts_"
         prefix = f"agent_{score_int}_pts_"
-        
-        # Conta quanti file esistono già con questo punteggio esatto
         existing_agents = [f for f in os.listdir(save_dir) if f.startswith(prefix)]
         
-        # Se abbiamo già 2 o più agenti con questo score, IGNORA il salvataggio
+        # Se abbiamo già 2 o più agenti con questo score esatto, NON salvare
         if len(existing_agents) >= 2:
             return
 
-        # Nome file con score e timestamp univoco
+        # Nome file univoco
         filename = f"{prefix}{int(time.time()*1000)}.py"
         filepath = os.path.join(save_dir, filename)
         
@@ -74,7 +77,7 @@ def save_interesting_agent(code_string, score):
             f.write(code_string)
             
     except Exception as e:
-        print(f"Errore salvataggio agente: {e}")
+        print(f"Errore salvataggio agente interessante: {e}")
 
 def clean_llm_code(code_string: str) -> str:
     """Rimuove i backticks di markdown."""
@@ -84,30 +87,25 @@ def clean_llm_code(code_string: str) -> str:
         return match.group(1).strip()
     return code_string.strip()
 
-def run_custom_simulation(action_function, specific_seed=None, visualization=False):
-    """
-    Esegue una simulazione singola.
-    Se specific_seed è None, usa un random seed > 100 (Training).
-    Se specific_seed è impostato, usa quello (Test/Validation).
-    """
+def run_custom_simulation(action_function, game_idx=0, visualization=False):
     render_mode = "human" if visualization else None
+    
     try:
-        env = SkiingOCAtariWrapper(render_mode=render_mode)
-    except Exception:
+        env = OCAtari(ENV_NAME, mode="ram", hud=False, render_mode=render_mode)
+        env = SpaceInvadersEgocentricWrapper(env, skip=4)
+    except Exception as e:
+        print(f"Errore Init Env: {e}")
         return 0.0
 
-    # --- LOGICA RANDOM SEED (TRAINING vs TEST) ---
-    if specific_seed is None:
-        # Training: Seed casuale ma "sicuro" (lontano dai primi 100 usati per i test)
-        current_seed = random.randint(100, 1000000)
-    else:
-        # Test: Seed specifico richiesto (es. 42)
-        current_seed = specific_seed
-    
-    # print(f"DEBUG: Using seed {current_seed}") 
+    current_seed = EVAL_SEEDS[game_idx % len(EVAL_SEEDS)]
     observation, info = env.reset(seed=current_seed)
     
-    total_reward = 0.0
+    initial_delay = (game_idx * 10) % 30
+    for _ in range(initial_delay):
+        observation, _, terminated, truncated, _ = env.step(0)
+        if terminated or truncated: break
+
+    episode_fitness = 0.0
     steps = 0
     terminated = False
     truncated = False
@@ -117,77 +115,86 @@ def run_custom_simulation(action_function, specific_seed=None, visualization=Fal
             try:
                 action = int(action_function(observation))
             except Exception:
-                return -10000.0
+                # Penalità ridotta per evitare di scartare logiche promettenti ma con bug minori
+                return -10.0
+
+            # CALCOLO FITNESS (Aiming + Survival)
+            danger_level = observation[3]
+            is_safe = danger_level < 0.25
+            
+            if action == 1:
+                episode_fitness -= 0.05
+            
+            if is_safe:
+                rel_x = observation[11]
+                if abs(rel_x) < 0.15:
+                    episode_fitness += 0.02
+            else:
+                episode_fitness -= (danger_level * 0.2)
 
             observation, reward, terminated, truncated, info = env.step(action)
-            total_reward += reward
+            
+            if reward > 0:
+                episode_fitness += reward
+                episode_fitness += (reward * 0.5)
+
             steps += 1
             if visualization: time.sleep(0.01)
-    except Exception:
+
+        if episode_fitness <= 0:
+            episode_fitness = max(0.001, steps / 10000.0)
+
+    except Exception as e:
+        print(f"Errore runtime: {e}")
         return -10000.0
     finally:
         env.close()
 
-    return total_reward
+    return episode_fitness
 
 def evaluate(input_data: str) -> EvaluationResult:
-    # 1. GESTIONE INPUT E CARICAMENTO CODICE
     code_to_exec = input_data
     if os.path.exists(input_data) and input_data.endswith('.py'):
         try:
             with open(input_data, 'r', encoding='utf-8') as f:
                 code_to_exec = f.read()
         except Exception:
-            log_to_csv(-9999.0)
             return EvaluationResult(metrics={'combined_score': -9999.0})
 
-    # 2. PULIZIA
     cleaned_code = clean_llm_code(code_to_exec)
-
-    # 3. COMPILAZIONE
+    
     try:
         spec = importlib.util.spec_from_loader("agent_module", loader=None)
         agent_module = importlib.util.module_from_spec(spec)
         exec(cleaned_code, agent_module.__dict__)
         
         if not hasattr(agent_module, 'get_action'):
-             log_to_csv(-9999.0)
              return EvaluationResult(metrics={'combined_score': -9999.0})
              
         get_action_func = agent_module.get_action
 
     except Exception:
-        log_to_csv(-9999.0) 
         return EvaluationResult(metrics={'combined_score': -9999.0})
 
-    # 4. SIMULAZIONE (RANDOM TRAINING)
     total_score = 0
     for i in range(NUM_GAMES_PER_EVAL):
-        # Non passiamo 'game_idx' o 'specific_seed', così ne pesca uno random > 100
-        score = run_custom_simulation(action_function=get_action_func, visualization=False)
+        score = run_custom_simulation(get_action_func, game_idx=i, visualization=False)
         total_score += score
 
     avg_score = total_score / NUM_GAMES_PER_EVAL
     
-    # 5. LOGGING
     log_to_csv(avg_score)
 
-    # 6. SALVATAGGIO CON NUOVA SOGLIA
-    # Salva solo se supera 1000 punti (miglioramenti rispetto al seed_agent)
-    if avg_score > 3000.0:
+    # --- SALVATAGGIO INTELLIGENTE ---
+    # Salva se score > 1600 (per prendere anche comportamenti base)
+    # La funzione save_interesting_agent gestirà la limitazione dei duplicati
+    if avg_score > 1600.0:
         save_interesting_agent(cleaned_code, avg_score)
 
     return EvaluationResult(metrics={'combined_score': avg_score})
 
 if __name__ == "__main__":
-    try:
-        import initial_agent
-        print("Testing initial_agent (Validation Run)...")
-        
-        # QUI usiamo un seed riservato (< 100) per il test visivo
-        TEST_SEED = 42 
-        score = run_custom_simulation(initial_agent.get_action, specific_seed=TEST_SEED, visualization=True)
-        
-        print(f"Seed Agent Score (Seed {TEST_SEED}): {score}")
-    except ImportError:
-        print("❌ Errore: initial_agent.py non trovato!")
+    import initial_agent
+    print("Testing initial agent...")
+    score = run_custom_simulation(initial_agent.get_action, visualization=True)
+    print(f"Initial Agent Fitness: {score}")

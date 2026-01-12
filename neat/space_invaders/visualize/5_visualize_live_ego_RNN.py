@@ -27,7 +27,7 @@ RESULTS_DIR = os.path.join(project_root, 'results')
 TOP3_PATH = os.path.join(RESULTS_DIR, 'top3_list.pkl')
 WINNER_PATH = os.path.join(RESULTS_DIR, 'winner_ego.pkl')
 
-GAME_NAME = "SpaceInvadersNoFrameskip-v4"
+GAME_NAME = "ALE/SpaceInvaders-v5"
 
 def load_champion():
     if not os.path.exists(CONFIG_PATH):

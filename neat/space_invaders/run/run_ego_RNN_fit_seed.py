@@ -29,10 +29,17 @@ RESULTS_DIR = os.path.join(project_root, 'results')
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 GAME_NAME = "ALE/SpaceInvaders-v5"
-GENERATIONS = 500  # Run lunga
-print(f"✅ Configurazione: {GAME_NAME} (RNN + Survival Logic + Fast Mode)")
+GENERATIONS = 300
+NUM_WORKERS = max(1, multiprocessing.cpu_count() - 2)
 
-# --- PLOTTING ---
+# --- NUOVE CONFIGURAZIONI SEED ---
+TRAINING_SEED_MIN = 100      # Seed < 100 riservati al test
+TRAINING_SEED_MAX = 100000   # Range ampio per il training
+EPISODES_PER_GENOME = 3      # Media su 3 partite per robustezza
+
+print(f"✅ Configurazione: {GAME_NAME} (RNN + Survival Logic + Seed {TRAINING_SEED_MIN}+)")
+
+# --- PLOTTING (Invariato) ---
 def plot_stats(statistics):
     if not statistics.most_fit_genomes: return
     generation = range(len(statistics.most_fit_genomes))
@@ -48,44 +55,28 @@ def plot_stats(statistics):
     plt.close()
 
 def plot_species(statistics):
-    """ Speciation Graph (Stacked Plot) - Correct Version """
     print("📊 Generating Speciation Plot...")
-    
-    # Official NEAT method to get the correct counts
-    # This fixes the "dict object has no attribute members" error
     species_sizes = statistics.get_species_sizes()
-    
     if not species_sizes:
         print("⚠️ No speciation data found.")
         return
 
     num_generations = len(species_sizes)
-    
-    # Transpose the matrix to fit stackplot (Rows=Species, Cols=Generations)
     curves = np.array(species_sizes).T
 
     plt.figure(figsize=(12, 8))
     ax = plt.subplot(111)
-    
     try:
-        # Use stackplot for the filled area effect
         ax.stackplot(range(num_generations), *curves)
-        
         plt.title("Evolution of Species (Speciation)")
         plt.ylabel("Number of Genomes per Species")
         plt.xlabel("Generations")
-        plt.margins(0, 0) # Removes white side margins
-        
-        # Ensure RESULTS_DIR is defined in your global scope
+        plt.margins(0, 0)
         output_path = os.path.join(RESULTS_DIR, "speciation_ego_rnn_fit.png")
         plt.savefig(output_path)
         print(f"✅ Speciation plot saved to: {output_path}")
-        
     except Exception as e:
         print(f"❌ Error during plotting: {e}")
-        # Debug info
-        print(f"   Curves shape: {curves.shape if hasattr(curves, 'shape') else 'Unknown'}")
-    
     plt.close()
 
 
@@ -94,89 +85,93 @@ def eval_genome(genome, config):
     # 1. Creazione Rete RNN
     net = neat.nn.RecurrentNetwork.create(genome, config)
     
+    # Creazione ambiente (una volta per genoma per efficienza)
     try:
+        # Nota: render_mode=None per velocità massima
         env = OCAtari(GAME_NAME, mode="ram", hud=False, render_mode=None)
     except Exception:
         return 0.0
     
     env = SpaceInvadersEgocentricWrapper(env, skip=4)
     
-    # Per sicurezza sulla casualità
+    # Per sicurezza sulla casualità nei processi paralleli
     random.seed(os.getpid() + time.time())
     
-    # --- PARTITA SINGOLA (FAST MODE) ---
-    # Usiamo 1 sola partita per velocità, ma manteniamo il random delay
-    # per evitare l'overfitting su una singola configurazione.
-    
-    # A. Reset e Random No-Ops
-    observation, info = env.reset(seed=None)
-    
-    random_delay = random.randint(0, 30)
-    for _ in range(random_delay):
-        observation, _, terminated, truncated, _ = env.step(0)
-        if terminated or truncated: break
-    
-    if len(observation) != 19:
-        env.close()
-        return 0.0
-    
-    # Variabili Episodio
-    episode_fitness = 0.0  
-    steps = 0
-    terminated = False
-    truncated = False
-    max_steps = 6000 
-    
-    # Reset RNN
-    net.reset()
+    fitness_history = []
 
-    while not (terminated or truncated) and steps < max_steps:
-        outputs = net.activate(observation)
-        action = np.argmax(outputs)
+    # --- CICLO EPISODI (3 Partite diverse) ---
+    for episode in range(EPISODES_PER_GENOME):
         
-        # --- LOGICA DI FITNESS COMPLESSA (Survival + Aiming) ---
+        # A. Pesca un seed casuale dal range "sicuro" (>100)
+        current_seed = random.randint(TRAINING_SEED_MIN, TRAINING_SEED_MAX)
         
-        # 1. ANALISI PERICOLO (Survival Layer)
-        # obs[3] è il sensore CENTRALE (sopra la testa)
-        # Valore 0.0 = Libero, 1.0 = Proiettile addosso
-        danger_level = observation[3]
-        is_safe = danger_level < 0.25  # Soglia di sicurezza
+        # B. Reset con il seed specifico
+        observation, info = env.reset(seed=current_seed)
         
-        # 2. Penalità Sparo (Anti-Spam) - Sempre attiva
-        if action == 1:
-            episode_fitness -= 0.05 
+        # Random Delay (utile anche con seed fissi per variare leggermente lo start)
+        random_delay = random.randint(0, 30)
+        for _ in range(random_delay):
+            observation, _, terminated, truncated, _ = env.step(0)
+            if terminated or truncated: break
         
-        if is_safe:
-            # --- ZONA SICURA: Premia la Mira ---
-            # Se non c'è pericolo, l'IA deve pensare ad attaccare
-            rel_x = observation[11]
-            if abs(rel_x) < 0.15: 
-                episode_fitness += 0.02 # Bonus Mira ATTIVO
-        else:
-            # --- ZONA PERICOLO: Punisci la staticità ---
-            # Se c'è un proiettile sopra, NON dare bonus mira.
-            # Penalizza per ogni frame passato sotto il proiettile.
-            episode_fitness -= (danger_level * 0.2) 
+        if len(observation) != 19:
+            break # Errore wrapper
+        
+        # Variabili Episodio
+        episode_fitness = 0.0  
+        steps = 0
+        terminated = False
+        truncated = False
+        max_steps = 6000 
+        
+        # IMPORTANTE: Reset dello stato interno della RNN a inizio partita
+        net.reset()
 
-        # Step Ambiente
-        observation, reward, terminated, truncated, info = env.step(action)
-        
-        # 3. Reward Principale (Uccisione) - Priorità Assoluta
-        if reward > 0:
-            episode_fitness += reward         
-            episode_fitness += (reward * 0.5) # Bonus kill extra
+        while not (terminated or truncated) and steps < max_steps:
+            outputs = net.activate(observation)
+            action = np.argmax(outputs)
+            
+            # --- LOGICA DI FITNESS ---
+            danger_level = observation[3]
+            is_safe = danger_level < 0.25 
+            
+            # Penalità Sparo
+            if action == 1:
+                episode_fitness -= 0.05 
+            
+            if is_safe:
+                # Bonus Mira
+                rel_x = observation[11]
+                if abs(rel_x) < 0.15: 
+                    episode_fitness += 0.02 
+            else:
+                # Penalità Pericolo
+                episode_fitness -= (danger_level * 0.2) 
 
-        steps += 1
-        
-    # Bonus sopravvivenza minimo
-    if episode_fitness <= 0:
-        episode_fitness = max(0.001, steps / 10000.0)
+            # Step Ambiente
+            observation, reward, terminated, truncated, info = env.step(action)
+            
+            # Reward Kill
+            if reward > 0:
+                episode_fitness += reward         
+                episode_fitness += (reward * 0.5)
+
+            steps += 1
+            
+        # Bonus sopravvivenza minimo per l'episodio
+        if episode_fitness <= 0:
+            episode_fitness = max(0.001, steps / 10000.0)
+            
+        fitness_history.append(episode_fitness)
 
     env.close()
     
-    return episode_fitness
+    # Ritorna la MEDIA delle partite
+    if not fitness_history:
+        return 0.0
+    return np.mean(fitness_history)
 
-# --- MAIN ---
+# --- MAIN (Invariato) ---
 def run_training():
     if not os.path.exists(CONFIG_PATH):
         print(f"❌ Config non trovato: {CONFIG_PATH}")
@@ -196,12 +191,11 @@ def run_training():
     p.add_reporter(stats)
     p.add_reporter(neat.Checkpointer(10, filename_prefix=os.path.join(RESULTS_DIR, "neat-rnn-chk-")))
 
-    # Usa tutti i core disponibili meno 2
-    num_workers = max(1, multiprocessing.cpu_count() - 8)
-    pe = neat.ParallelEvaluator(num_workers, eval_genome)
+    # Usa i worker definiti sopra
+    pe = neat.ParallelEvaluator(NUM_WORKERS, eval_genome)
     
     try:
-        print(f"🚀 Avvio Training RNN (Survival + Aiming)...")
+        print(f"🚀 Avvio Training RNN (Survival + Aiming) su {EPISODES_PER_GENOME} seed per genoma...")
         winner = p.run(pe.evaluate, GENERATIONS)
         
         with open(os.path.join(RESULTS_DIR, 'winner_ego.pkl'), 'wb') as f:

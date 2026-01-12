@@ -1,7 +1,7 @@
 [NEAT]
 fitness_criterion     = max
 fitness_threshold     = 10000
-pop_size              = 1000
+pop_size              = 500
 reset_on_extinction   = False
 no_fitness_termination = False
 
@@ -11,7 +11,7 @@ num_inputs            = 19
 # === OUTPUT: 4 Azioni (NOOP, FIRE, RIGHT, LEFT) ===
 num_outputs           = 4
 num_hidden            = 0
-feed_forward          = False
+feed_forward          = True
 
 # --- STRUTTURA ---
 initial_connection      = partial_direct 0.5

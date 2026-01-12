@@ -5,7 +5,7 @@ import logging
 import re
 import datetime
 import time
-import threading  # <--- AGGIUNTO
+import threading
 import pandas as pd
 import matplotlib.pyplot as plt
 
@@ -15,7 +15,6 @@ if sys.platform == "win32":
     sys.stderr.reconfigure(encoding='utf-8')
 os.environ["PYTHONIOENCODING"] = "utf-8"
 
-# Import opzionale tqdm
 try:
     from tqdm import tqdm
 except ImportError:
@@ -25,22 +24,21 @@ from openevolve import run_evolution
 
 # --- CONFIGURAZIONE CARTELLE ---
 base_path = pathlib.Path(__file__).parent.resolve()
-
 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-run_name = f"run_skiing_{timestamp}"
+run_name = f"run_si_{timestamp}"
 output_dir = base_path / 'results' / run_name
 
 # File history specifico
 history_csv = output_dir / 'history.csv'
-gen_stats_csv = output_dir / 'generation_stats.csv'  # <--- AGGIUNTO
-os.environ["SKIING_HISTORY_PATH"] = str(history_csv)
+gen_stats_csv = output_dir / 'generation_stats.csv' 
+os.environ["SI_HISTORY_PATH"] = str(history_csv)
 
-initial_program_path = base_path / 'src' / 'initial_agent.py'
-#initial_program_path = base_path / 'src' / 'seed_agent.py'
+#initial_program_path = base_path / 'src' / 'initial_agent.py'
+initial_program_path = base_path / 'src' / 'seed_agent.py'      # <-- NUOVO (Il tuo campione)
 evaluator_path = base_path / 'src' / 'evaluator.py'
 config_path = base_path / 'configs' / 'config.yaml'
 
-# --- LOG PARSER THREAD (AGGIUNTO DA CODICE A) ---
+# --- LOG PARSER THREAD ---
 class LogStatsWatcher(threading.Thread):
     """
     Legge il file di log in tempo reale ed estrae le statistiche 
@@ -99,7 +97,6 @@ class LogStatsWatcher(threading.Thread):
         self.stop_event.set()
 
 class ProgressBarHandler(logging.Handler):
-    """Barra di progresso per OpenEvolve."""
     def __init__(self, total_iterations):
         super().__init__()
         if tqdm:
@@ -122,14 +119,12 @@ class ProgressBarHandler(logging.Handler):
         super().close()
 
 def format_duration(seconds):
-    """Converte secondi in formato H:M:S."""
     m, s = divmod(seconds, 60)
     h, m = divmod(m, 60)
     return f"{int(h)}h {int(m)}m {int(s)}s"
 
 def get_config_details():
-    """Legge il config.yaml per estrarre info utili per il plot."""
-    details = { "max_iter": 30, "pop_size": "N/A", "model": "Unknown" }
+    details = { "max_iter": 100, "pop_size": "N/A", "model": "Unknown" }
     try:
         with open(config_path, 'r', encoding='utf-8') as f:
             content = f.read()
@@ -144,58 +139,43 @@ def get_config_details():
     return details
 
 def plot_results(duration_str=""):
-    """Genera grafico Fitness e Statistiche finali con Metadata (FIXED LAYOUT)."""
     print("\n--- Generazione Grafici ---")
     config_data = get_config_details()
     
-    # --- 1. PLOT HISTORY (Originale Skiing) ---
+    # 1. Grafico Fitness Individuale (History)
     if history_csv.exists():
         try:
             df = pd.read_csv(history_csv)
             if not df.empty:
                 df['attempt'] = range(1, len(df) + 1)
-                
-                # Setup Figura
                 plt.figure(figsize=(12, 8))
                 
-                # Filtri Crash vs Validi
-                error_runs = df[df['score'] <= -9000]
                 valid_runs = df[df['score'] > -9000]
-
-                if not error_runs.empty:
-                    plt.scatter(error_runs['attempt'], error_runs['score'], c='red', label='Crash / Errori', alpha=0.3, s=15, marker='x')
-
                 if not valid_runs.empty:
-                    plt.scatter(valid_runs['attempt'], valid_runs['score'], c='blue', label='Validi', alpha=0.6, s=20)
+                    plt.scatter(valid_runs['attempt'], valid_runs['score'], c='blue', label='Individual Eval', alpha=0.3, s=10)
 
                 df['best_so_far'] = df['score'].cummax()
                 plt.plot(df['attempt'], df['best_so_far'], c='green', linewidth=2, label='Best So Far')
-
-                # --- FIX TITOLI ---
-                plt.subplots_adjust(top=0.85)
-                plt.suptitle(f"Evoluzione Skiing - {timestamp}", fontsize=16, fontweight='bold', y=0.95)
                 
-                subtitle = (f"Model: {config_data['model']} | Pop: {config_data['pop_size']} | "
-                            f"Max Gen: {config_data['max_iter']} | Duration: {duration_str}")
-                
-                plt.title(subtitle, fontsize=10, pad=10, backgroundcolor='#eeeeee')
+                # Overlay Gen Stats se disponibili
+                if gen_stats_csv.exists():
+                     df_gen = pd.read_csv(gen_stats_csv)
+                     if not df_gen.empty:
+                         # Scaliamo l'asse X approssimativamente o usiamo un secondo asse?
+                         # Per semplicità plottiamo l'average come linea orizzontale 'media'
+                         pass 
 
-                plt.xlabel("Numero Valutazioni (Tentativi)")
-                plt.ylabel("Score")
-                plt.legend(loc='lower right')
+                plt.title(f"Space Invaders Evolution - {timestamp}")
+                plt.xlabel("Evaluations")
+                plt.ylabel("Fitness")
+                plt.legend()
                 plt.grid(True, alpha=0.3)
-
-                safe_model_name = re.sub(r'[^\w\-]', '_', config_data['model'])
-                plot_filename = f'fitness_plot_{safe_model_name}_pop{config_data["pop_size"]}.png'
-                
-                output_plot = output_dir / plot_filename
-                plt.savefig(output_plot, dpi=150)
+                plt.savefig(output_dir / 'fitness_plot.png')
                 plt.close()
-                print(f"✅ Grafico History salvato in: {output_plot}")
         except Exception as e:
-            print(f"❌ Errore plot history: {e}")
+            print(f"Errore plot history: {e}")
 
-    # --- 2. PLOT GENERATION STATS (Aggiunto da Space Invaders) ---
+    # 2. Grafico Generazionale (Avg vs Best)
     if gen_stats_csv.exists():
         try:
             df = pd.read_csv(gen_stats_csv)
@@ -205,7 +185,7 @@ def plot_results(duration_str=""):
                 plt.plot(df['generation'], df['avg_score'], 'b-', label='Avg Score')
                 plt.fill_between(df['generation'], df['avg_score'], df['best_score'], color='green', alpha=0.1)
                 
-                plt.title(f"Generation Stats (Avg vs Best) - Skiing")
+                plt.title(f"Generation Stats (Avg vs Best)")
                 plt.xlabel("Generation")
                 plt.ylabel("Score")
                 plt.legend()
@@ -218,26 +198,19 @@ def plot_results(duration_str=""):
 
 def setup_env():
     output_dir.mkdir(parents=True, exist_ok=True)
-    if not (base_path / 'history').exists():
-        (base_path / 'history').mkdir()
 
 def run_experiment():
-    print(f"--- Avvio OpenEvolve SKIING ---")
-    print(f"Output Directory: {output_dir}")
+    print(f"--- Avvio OpenEvolve SPACE INVADERS (v5) ---")
     
     start_time = time.time()
-    
     config_info = get_config_details()
-    max_iter = config_info["max_iter"]
     
-    print(f"Model: {config_info['model']} | Pop: {config_info['pop_size']}")
-    
-    # --- START WATCHER (AGGIUNTO) ---
+    # Avvia Watcher
     log_dir = output_dir / "logs"
     watcher = LogStatsWatcher(str(log_dir), str(gen_stats_csv))
     watcher.start()
     
-    bar_handler = ProgressBarHandler(max_iter)
+    bar_handler = ProgressBarHandler(config_info["max_iter"])
     bar_handler.setLevel(logging.INFO)
     logging.getLogger().addHandler(bar_handler)
     
@@ -251,19 +224,12 @@ def run_experiment():
     except Exception as e:
         print(f"Errore Run: {e}")
     finally:
-        # --- STOP WATCHER (AGGIUNTO) ---
         watcher.stop()
-        
         end_time = time.time()
-        duration_sec = end_time - start_time
-        duration_str = format_duration(duration_sec)
-        
+        duration_str = format_duration(end_time - start_time)
         bar_handler.close()
         plot_results(duration_str)
-        
-        print(f"\n" + "="*40)
-        print(f"⏱️  TEMPO TOTALE RUN: {duration_str}")
-        print(f"="*40 + "\n")
+        print(f"\n⏱️  TEMPO TOTALE: {duration_str}\n")
 
 if __name__ == '__main__':
     setup_env()

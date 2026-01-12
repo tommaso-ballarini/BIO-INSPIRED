@@ -22,7 +22,7 @@ from openevolve.evaluation_result import EvaluationResult
 # --- CONFIGURAZIONE ---
 ENV_NAME = 'ALE/Skiing-v5'
 MAX_STEPS_PER_GAME = 2000
-NUM_GAMES_PER_EVAL = 5 # Media su 3 partite diverse
+NUM_GAMES_PER_EVAL = 3 # Media su 3 partite diverse
 EVAL_SEEDS = [3, 1, 22] # Semi deterministici per la riproducibilità
 
 def log_to_csv(score):
@@ -84,11 +84,10 @@ def clean_llm_code(code_string: str) -> str:
         return match.group(1).strip()
     return code_string.strip()
 
-def run_custom_simulation(action_function, specific_seed=None, visualization=False):
+def run_custom_simulation(action_function, game_idx=0, visualization=False):
     """
     Esegue una simulazione singola.
-    Se specific_seed è None, usa un random seed > 100 (Training).
-    Se specific_seed è impostato, usa quello (Test/Validation).
+    Usa game_idx per selezionare il seed deterministico dalla lista EVAL_SEEDS.
     """
     render_mode = "human" if visualization else None
     try:
@@ -96,17 +95,11 @@ def run_custom_simulation(action_function, specific_seed=None, visualization=Fal
     except Exception:
         return 0.0
 
-    # --- LOGICA RANDOM SEED (TRAINING vs TEST) ---
-    if specific_seed is None:
-        # Training: Seed casuale ma "sicuro" (lontano dai primi 100 usati per i test)
-        current_seed = random.randint(100, 1000000)
-    else:
-        # Test: Seed specifico richiesto (es. 42)
-        current_seed = specific_seed
+    # --- LOGICA STOCASTICITÀ ---
+    # Ruota i seed: 42 -> 43 -> 44 -> 42 ...
+    current_seed = EVAL_SEEDS[game_idx % len(EVAL_SEEDS)]
     
-    # print(f"DEBUG: Using seed {current_seed}") 
     observation, info = env.reset(seed=current_seed)
-    
     total_reward = 0.0
     steps = 0
     terminated = False
@@ -160,11 +153,10 @@ def evaluate(input_data: str) -> EvaluationResult:
         log_to_csv(-9999.0) 
         return EvaluationResult(metrics={'combined_score': -9999.0})
 
-    # 4. SIMULAZIONE (RANDOM TRAINING)
+    # 4. SIMULAZIONE (LOOP STOCASTICO)
     total_score = 0
     for i in range(NUM_GAMES_PER_EVAL):
-        # Non passiamo 'game_idx' o 'specific_seed', così ne pesca uno random > 100
-        score = run_custom_simulation(action_function=get_action_func, visualization=False)
+        score = run_custom_simulation(get_action_func, game_idx=i, visualization=False)
         total_score += score
 
     avg_score = total_score / NUM_GAMES_PER_EVAL
@@ -174,20 +166,18 @@ def evaluate(input_data: str) -> EvaluationResult:
 
     # 6. SALVATAGGIO CON NUOVA SOGLIA
     # Salva solo se supera 1000 punti (miglioramenti rispetto al seed_agent)
-    if avg_score > 3000.0:
+    if avg_score > 1000.0:
         save_interesting_agent(cleaned_code, avg_score)
 
     return EvaluationResult(metrics={'combined_score': avg_score})
 
 if __name__ == "__main__":
+    # --- MODIFICA: USIAMO SEED_AGENT ---
     try:
         import initial_agent
-        print("Testing initial_agent (Validation Run)...")
-        
-        # QUI usiamo un seed riservato (< 100) per il test visivo
-        TEST_SEED = 42 
-        score = run_custom_simulation(initial_agent.get_action, specific_seed=TEST_SEED, visualization=True)
-        
-        print(f"Seed Agent Score (Seed {TEST_SEED}): {score}")
+        print("Testing initial_agent (best from previous run)...")
+        # Test visuale sulla prima mappa (Seed 42)
+        score = run_custom_simulation(initial_agent.get_action, game_idx=0, visualization=True)
+        print(f"Seed Agent Score (Game 1): {score}")
     except ImportError:
-        print("❌ Errore: initial_agent.py non trovato!")
+        print("❌ Errore: initial_agent.py non trovato nella cartella src!")

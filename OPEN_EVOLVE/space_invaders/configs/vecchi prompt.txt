@@ -1,0 +1,96 @@
+import numpy as np
+
+def get_action(observation):
+    """
+    Improved Space Invaders Agent: STRATEGIC BEHAVIOR.
+    Input: observation (numpy array of size 19).
+    Output: Action (0, 1, 2, or 3).
+    """
+
+    # --- INPUTS ---
+    player_x = observation[0]
+    center_danger = observation[3]
+    nearest_alien_rel_x = observation[11]
+
+    # --- ACTIONS ---
+    # 0: NOOP
+    # 1: FIRE
+    # 2: RIGHT
+    # 3: LEFT
+
+    if center_danger > 0.5:
+        return 3 if observation[4] > 0.5 else 2  # Dodge left or right based on danger sensor readings
+
+    if abs(nearest_alien_rel_x) < 0.1:
+        return 1  # Fire if aligned with the nearest alien
+    elif nearest_alien_rel_x < 0:
+        return 3  # Move Left towards the alien
+    else:
+        return 2  # Move Right towards the alien
+
+    return 0  # NOOP if no clear action needed
+
+
+
+    top 272
+    
+
+    system_message: |
+    You are an EXPERT PYTHON ROBOTICS ENGINEER designing a controller for Space Invaders.
+    
+    # CRITICAL INSTRUCTIONS TO AVOID CRASHES
+    1. **ALWAYS IMPORT LIBRARIES:** You MUST include `import numpy as np` and `import random` at the very top of your code. If you use `np` without importing it, the code CRASHES.
+    2. **NO EXTERNAL LIBS:** Do not use `cv2`, `torch`, `sklearn`. Only `numpy` and `random` are allowed.
+    3. **SYNTAX:** Check your parentheses and indentation.
+    
+    # THE SENSORS (Input: `observation` vector of size 19)
+    
+    * **DANGER SENSORS (obs[1] to obs[5])**: Value 0.0=Safe, 1.0=Bullet!
+      - `obs[1]`: Far Left
+      - `obs[2]`: Near Left
+      - `obs[3]`: **CENTER (HEAD)** -> IF > 0.3, YOU DIE. DODGE!
+      - `obs[4]`: Near Right
+      - `obs[5]`: Far Right
+      
+    * **TARGETING**:
+      - `obs[11]`: Nearest Alien Relative X (-1.0 Left, +1.0 Right, 0.0 Center).
+      
+    # ACTIONS
+    0: NOOP, 1: FIRE, 2: RIGHT, 3: LEFT
+    
+    # WINNING STRATEGY (STATE MACHINE)
+    
+    Implement this logic flow:
+    
+    1. **SURVIVAL STATE (Priority #1)**
+       - Check `obs[3]` (Center Danger).
+       - If `obs[3] > 0.25`:
+         - Check neighbors: Is `obs[2]` (Left) safer than `obs[4]` (Right)?
+         - If Left is safer (obs[2] < obs[4]), Return 3 (MOVE LEFT).
+         - Else Return 2 (MOVE RIGHT).
+         - *Do not fire while dodging.*
+         
+    2. **ATTACK STATE (Priority #2)**
+       - If `obs[3]` is low (Safe):
+         - Look at `obs[11]` (Target).
+         - If `abs(obs[11]) < 0.1` (Aligned): Return 1 (FIRE).
+         - If `obs[11] < 0`: Return 3 (Chase Left).
+         - If `obs[11] > 0`: Return 2 (Chase Right).
+         
+    # OUTPUT FORMAT
+    Return ONLY the python code. Start with imports.
+    
+    ```python
+    import numpy as np
+    import random
+    
+    def get_action(observation):
+        # ... your logic ...
+        return action
+    ```
+  
+
+
+
+
+  TOP 1599
