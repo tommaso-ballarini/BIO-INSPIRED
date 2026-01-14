@@ -5,94 +5,170 @@ import pickle
 import numpy as np
 import gymnasium as gym
 from glob import glob
+import time
+from tqdm import tqdm
 
 # --- PATH SETUP ---
 script_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.abspath(os.path.join(script_dir, '..')) 
+project_root = os.path.dirname(script_dir)
+sys.path.append(project_root)
 
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
+# Try importing Custom Wrapper
 try:
-    import ale_py
-    gym.register_envs(ale_py)
+    from wrapper.wrapper import BioSkiingOCAtariWrapper
+    WRAPPER_AVAILABLE = True
 except ImportError:
-    print("Error: ale-py not installed.")
-    sys.exit(1)
+    print("⚠️ Warning: Wrapper not found. Custom fitness will equal raw score.")
+    WRAPPER_AVAILABLE = False
 
-ENV_ID = "ALE/Skiing-v5"
+# --- CONFIGURATION ---
 RESULTS_DIR = os.path.join(project_root, "evolution_results", "baseline_run")
+CONFIG_FILENAME = "config_baseline.txt"
+TEST_SEEDS = range(100)  # Seeds 0-99
 
 def load_latest_winner():
-    """Finds the most recent pickle file in baseline_run."""
+    """Finds the most recent pickle file."""
     if not os.path.exists(RESULTS_DIR):
-        print(f"Error: Directory not found {RESULTS_DIR}")
+        print(f"❌ Error: Directory {RESULTS_DIR} not found.")
         sys.exit(1)
 
     all_files = glob(os.path.join(RESULTS_DIR, "*.pkl"))
-    
     if not all_files:
-        print(f"No .pkl files found in {RESULTS_DIR}")
+        print(f"❌ No .pkl files found in {RESULTS_DIR}")
         sys.exit(1)
     
     latest_file = max(all_files, key=os.path.getctime)
-    print(f"Loading genome from: {os.path.basename(latest_file)}")
+    print(f"📂 Loading genome: {os.path.basename(latest_file)}")
     
     with open(latest_file, 'rb') as f:
         data = pickle.load(f)
-    
-    if isinstance(data, tuple):
-        return data[0]
-    else:
-        return data
+    return data[0] if isinstance(data, tuple) else data
 
-def visualize():
+def run_simulation(genome, config, seed, render=False):
+    """Runs a full episode. Returns (native_score, custom_fitness)."""
+    
+    # 1. Environment Setup
+    render_mode = "human" if render else None
+    
+    if WRAPPER_AVAILABLE:
+        try:
+            env = BioSkiingOCAtariWrapper(render_mode=render_mode)
+        except:
+            env = BioSkiingOCAtariWrapper(render_mode=None)
+    else:
+        env = gym.make("ALE/Skiing-v5", obs_type="ram", render_mode=render_mode)
+
+    # 2. Reset
+    observation, info = env.reset(seed=seed)
+    
+    # 3. Network Setup
+    net = neat.nn.FeedForwardNetwork.create(genome, config)
+    
+    done = False
+    total_native = 0.0
+    total_custom = 0.0
+    
+    # Check input expectations (RAM vs Wrapper)
+    input_dim = config.genome_config.num_inputs
+    use_ram_override = (input_dim == 128) and WRAPPER_AVAILABLE
+
+    try:
+        while not done:
+            # --- Input Handling ---
+            if use_ram_override:
+                ram = env.env._env.unwrapped.ale.getRAM()
+                inputs = ram / 255.0
+            elif not WRAPPER_AVAILABLE:
+                inputs = observation / 255.0
+            else:
+                inputs = observation
+
+            # --- Action ---
+            output = net.activate(inputs)
+            action = np.argmax(output)
+            
+            # --- Step ---
+            observation, reward, terminated, truncated, info = env.step(action)
+            
+            # --- Data Collection ---
+            if WRAPPER_AVAILABLE:
+                total_custom += reward
+                total_native += info.get('native_reward', 0.0)
+            else:
+                total_native += reward
+                total_custom += reward
+
+            done = terminated or truncated
+            
+            if render:
+                time.sleep(0.005)
+
+    except Exception as e:
+        print(f"Sim Error (Seed {seed}): {e}")
+    finally:
+        env.close()
+
+    return total_native, total_custom
+
+def main():
+    # 1. Setup
     genome = load_latest_winner()
+    config_path = os.path.join(project_root, "config", CONFIG_FILENAME)
     
-    config_path = os.path.join(project_root, "config", "config_baseline.txt")
-    
-    if not os.path.exists(config_path):
-        print(f"Error: Config not found at {config_path}")
-        sys.exit(1)
-        
     config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
                          neat.DefaultSpeciesSet, neat.DefaultStagnation,
                          config_path)
 
-    env = gym.make(ENV_ID, obs_type="ram", render_mode="human")
-    
-    input_size = config.genome_config.num_inputs
-    
-    if input_size != 128:
-        print(f"Warning: Config specifies {input_size} inputs. Baseline requires 128.")
+    print(f"\n🚀 STARTING BENCHMARK ({len(TEST_SEEDS)} SEEDS)...")
+    print("=" * 60)
 
-    observation, info = env.reset(seed=14)
+    results = []
     
-    # Baseline uses FeedForward
-    net = neat.nn.FeedForwardNetwork.create(genome, config)
+    # 2. Benchmark Loop
+    iterator = tqdm(TEST_SEEDS, desc="Running") if 'tqdm' in sys.modules else TEST_SEEDS
     
-    done = False
-    total_reward = 0.0
-    
-    print("--- STARTING REPLAY ---")
-    
-    try:
-        while not done:
-            # Manual normalization for baseline
-            inputs = observation / 255.0
-            
-            output = net.activate(inputs)
-            action = np.argmax(output)
-            
-            observation, reward, terminated, truncated, info = env.step(action)
-            total_reward += reward
-            done = terminated or truncated
-            
-    except KeyboardInterrupt:
-        print("Interrupted by user.")
-        
-    print(f"Game Over. Total Fitness: {total_reward}")
-    env.close()
+    for seed in iterator:
+        native, custom = run_simulation(genome, config, seed, render=False)
+        results.append({
+            'seed': seed,
+            'native': native,
+            'custom': custom
+        })
+
+    # 3. Analysis
+    native_scores = [r['native'] for r in results]
+    custom_scores = [r['custom'] for r in results]
+
+    best_native_run = max(results, key=lambda x: x['native'])
+    best_custom_run = max(results, key=lambda x: x['custom'])
+    worst_native_run = min(results, key=lambda x: x['native'])
+
+    avg_native = np.mean(native_scores)
+    avg_custom = np.mean(custom_scores)
+
+    # 4. Final Report
+    print("\n" + "="*60)
+    print("📊 FINAL RESULTS")
+    print("="*60)
+    print(f"AVERAGE ({len(TEST_SEEDS)} runs):")
+    print(f"  ❄️  Native Score:   {avg_native:.2f}  (± {np.std(native_scores):.2f})")
+    print(f"  🎯  Custom Fitness: {avg_custom:.2f}  (± {np.std(custom_scores):.2f})")
+    print("-" * 30)
+    print("🏆 HALL OF FAME:")
+    print(f"  BEST NATIVE (Seed {best_native_run['seed']}):  {best_native_run['native']:.1f}")
+    print(f"  BEST CUSTOM (Seed {best_custom_run['seed']}):  {best_custom_run['custom']:.1f}")
+    print("-" * 30)
+    print(f"💩 WORST RUN  (Seed {worst_native_run['seed']}):  {worst_native_run['native']:.1f}")
+    print("="*60)
+
+    # 5. Visualization Prompt
+    choice = input(f"\n🎥 Watch the BEST game (Seed {best_native_run['seed']})? [y/N]: ").strip().lower()
+    if choice == 'y':
+        print(f"Replaying Seed {best_native_run['seed']}...")
+        run_simulation(genome, config, best_native_run['seed'], render=True)
+        print("Done.")
+    else:
+        print("Skipping visualization.")
 
 if __name__ == "__main__":
-    visualize()
+    main()

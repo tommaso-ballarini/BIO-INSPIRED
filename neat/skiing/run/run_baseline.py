@@ -8,6 +8,7 @@ import multiprocessing
 import gymnasium as gym
 import ale_py
 import matplotlib.pyplot as plt
+import random
 
 # Register Atari environments
 gym.register_envs(ale_py)
@@ -16,6 +17,8 @@ gym.register_envs(ale_py)
 ENV_ID = "ALE/Skiing-v5"
 CONFIG_FILE_NAME = "config_baseline.txt"
 NUM_GENERATIONS = 20
+TRAINING_SEED_MIN = 100      # Seed < 100 reserved for testing
+TRAINING_SEED_MAX = 100000  
 MAX_STEPS = 2000
 NUM_WORKERS = max(1, multiprocessing.cpu_count() - 2)
 
@@ -33,7 +36,10 @@ def eval_genome(genome, config):
     Fitness is the native game reward.
     """
     env = gym.make(ENV_ID, obs_type="ram", render_mode=None)
-    observation, info = env.reset()
+
+    current_seed = random.randint(TRAINING_SEED_MIN, TRAINING_SEED_MAX)
+
+    observation, info = env.reset(seed=current_seed)
     
     net = neat.nn.FeedForwardNetwork.create(genome, config)
     
