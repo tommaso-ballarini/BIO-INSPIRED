@@ -20,33 +20,29 @@ except Exception:
 
 # --- CONFIGURATION ---
 ENV_ID = "ALE/Freeway-v5"
-CONFIG_FILE_NAME = "neat_freeway_config.txt" 
-NUM_GENERATIONS = 50 
+CONFIG_FILE_NAME = "neat_freeway_config.txt" # Must have num_inputs = 22
+NUM_GENERATIONS = 50
 TRAINING_SEED_MIN = 100
 TRAINING_SEED_MAX = 1000000
 MAX_STEPS = 1500
 NUM_WORKERS = max(1, multiprocessing.cpu_count() - 2)
 
-# Path Setup
+# Path Setup (neat/freeway/run/...)
 SCRIPT_DIR = Path(__file__).resolve().parent
-FREEWAY_ROOT = SCRIPT_DIR.parent 
-OUTPUT_DIR = FREEWAY_ROOT / "results" / "neat_freeway_rnn_shaped"
+FREEWAY_ROOT = SCRIPT_DIR.parent
+OUTPUT_DIR = FREEWAY_ROOT / "results" / "neat_freeway_shaped"
 CONFIG_PATH = FREEWAY_ROOT / "config" / CONFIG_FILE_NAME
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 def eval_genome(genome, config):
     """
-    RNN Evaluation with Shaped Fitness:
-    - Rewards: Crossings (High), Vertical Progress (Medium)
-    - Penalties: Collisions (Small), Time/Steps (Very Small)
+    Shaped Fitness Evaluation: Rewards crossing AND vertical progress.
     """
     import sys
     from pathlib import Path
-    
-    # Path fix for workers to find the wrapper (2 levels up)
-    current_file = Path(__file__).resolve()
-    freeway_root = current_file.parent.parent
+    # Ensure worker finds the wrapper (2 levels up from run folder)
+    freeway_root = Path(__file__).resolve().parent.parent
     if str(freeway_root) not in sys.path:
         sys.path.insert(0, str(freeway_root))
 
@@ -59,46 +55,34 @@ def eval_genome(genome, config):
     seed = random.randint(TRAINING_SEED_MIN, TRAINING_SEED_MAX)
     obs, info = env.reset(seed=seed)
     
-    # Use RecurrentNetwork for RNN architectures
-    net = neat.nn.RecurrentNetwork.create(genome, config)
+    net = neat.nn.FeedForwardNetwork.create(genome, config)
     
     total_reward = 0.0
-    max_y = 0.0
+    max_y = 0.0 # Track vertical progress
     steps = 0
-    collisions = 0
-    prev_y = obs[0]
     done = False
     
     while not done and steps < MAX_STEPS:
         output = net.activate(obs)
         action = np.argmax(output) 
         
-        obs, native_reward, terminated, truncated, info = env.step(action)
+        obs, reward, terminated, truncated, _ = env.step(action)
         
-        current_y = obs[0]
-        
-        # 1. Reward Native Crossings (multiplied for importance)
-        total_reward += float(native_reward) * 100.0
-        
-        # 2. Reward Vertical Progress (Max height reached)
+        # --- SHAPED FITNESS LOGIC ---
+        # reward = native crossing points (usually 1.0 per crossing)
+        # obs[0] often represents the normalized Y position in many Freeway wrappers
+        current_y = obs[0] 
         if current_y > max_y:
-            total_reward += (current_y - max_y) * 20.0
+            # Reward incremental vertical progress to encourage moving UP
+            total_reward += (current_y - max_y) * 0.1 
             max_y = current_y
             
-        # 3. Penalty for Collisions (Heuristic: Y decreases suddenly)
-        if current_y < prev_y - 0.05:
-            total_reward -= 2.0
-            collisions += 1
-            
-        # 4. Time Penalty (Step-based)
-        total_reward -= 0.01
-        
-        prev_y = current_y
+        total_reward += float(reward) # Add crossing points
         steps += 1
         done = terminated or truncated
         
     env.close()
-    return max(0.0, total_reward)
+    return total_reward
 
 def plot_results(stats, save_dir):
     print(f"Generating plots in: {save_dir}")
@@ -107,22 +91,18 @@ def plot_results(stats, save_dir):
     if stats.most_fit_genomes:
         gen = range(len(stats.most_fit_genomes))
         plt.figure(figsize=(10, 6))
-        plt.plot(gen, stats.get_fitness_mean(), 'b-', label="Average Fitness")
+        plt.plot(gen, stats.get_fitness_mean(), 'b-', label="Avg Fitness")
         plt.plot(gen, [c.fitness for c in stats.most_fit_genomes], 'r-', label="Best Fitness")
-        plt.title("RNN Shaped + Time Penalty Evolution")
+        plt.title("Freeway Shaped Fitness Evolution")
         plt.xlabel("Generations")
-        plt.ylabel("Fitness Value")
-        plt.grid(True, linestyle='--', alpha=0.6)
+        plt.ylabel("Fitness (Shaped)")
         plt.legend()
-        plt.savefig(save_dir / f"rnn_shaped_fitness_{ts}.png")
+        plt.savefig(save_dir / f"shaped_fitness_{ts}.png")
         plt.close()
 
 def run_experiment():
-    print("STARTING FREEWAY RNN SHAPED EXPERIMENT")
-    
     config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
-                         neat.DefaultSpeciesSet, neat.DefaultStagnation,
-                         str(CONFIG_PATH))
+                         neat.DefaultSpeciesSet, neat.DefaultStagnation, str(CONFIG_PATH))
     
     p = neat.Population(config)
     p.add_reporter(neat.StdOutReporter(True))
@@ -133,19 +113,16 @@ def run_experiment():
     
     try:
         winner = p.run(pe.evaluate, NUM_GENERATIONS)
-        
         ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-        with open(OUTPUT_DIR / f"winner_rnn_shaped_{ts}.pkl", "wb") as f:
-            pickle.dump(winner, f)
-            
-        plot_results(stats, OUTPUT_DIR)
         
+        with open(OUTPUT_DIR / f"winner_shaped_{ts}.pkl", "wb") as f:
+            pickle.dump(winner, f)
+        
+        plot_results(stats, OUTPUT_DIR)
     except KeyboardInterrupt:
-        print("\nTraining interrupted.")
+        pass
 
 if __name__ == "__main__":
-    try:
-        multiprocessing.set_start_method('spawn')
-    except RuntimeError:
-        pass
+    try: multiprocessing.set_start_method('spawn')
+    except RuntimeError: pass
     run_experiment()

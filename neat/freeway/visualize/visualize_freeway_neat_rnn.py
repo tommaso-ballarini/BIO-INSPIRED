@@ -1,62 +1,103 @@
-import pickle
+import os
 import sys
-import time
-import numpy as np
 import neat
+import pickle
+import numpy as np
 import gymnasium as gym
+import time
 from pathlib import Path
+from glob import glob
 
-# --- MODULE PATH FIX ---
-SCRIPT_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = SCRIPT_DIR.parent
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+# --- PATH SETUP ---
+current_file = Path(__file__).resolve()
+freeway_root = current_file.parent.parent
+if str(freeway_root) not in sys.path:
+    sys.path.insert(0, str(freeway_root))
 
 try:
     import ale_py
     gym.register_envs(ale_py)
-except Exception: pass
+except Exception:
+    pass
 
-RESULTS_DIR = PROJECT_ROOT / "results"
+# --- CONFIGURATION ---
+RESULTS_DIR = freeway_root / "results" / "neat_freeway_rnn"
+CONFIG_FILENAME = "neat_freeway_config.txt"
+TEST_SEEDS = range(100)
+ENV_ID = "ALE/Freeway-v5"
 
-def choose_run():
-    folders = sorted([f for f in RESULTS_DIR.iterdir() if f.is_dir()], reverse=True)
-    print("\n--- SELECT RNN RUN ---")
-    for i, f in enumerate(folders): print(f"[{i}] {f.name}")
-    idx = input("\nIndex (default 0): ").strip()
-    return folders[int(idx) if idx.isdigit() else 0]
+def load_latest_winner():
+    all_files = glob(os.path.join(RESULTS_DIR, "winner_rnn_*.pkl"))
+    if not all_files:
+        print(f"Error: No RNN winner files in {RESULTS_DIR}")
+        sys.exit(1)
+    
+    latest_file = max(all_files, key=os.path.getctime)
+    print(f"Loading latest RNN winner: {os.path.basename(latest_file)}")
+    with open(latest_file, 'rb') as f:
+        data = pickle.load(f)
+    return data[0] if isinstance(data, tuple) else data
 
-def run_visualize(run_path):
+def run_simulation(genome, config, seed, render=False):
     from wrapper.freeway_wrapper import FreewaySpeedWrapper
     
-    run_dir = Path(run_path)
-    with open(run_dir / "winner.pkl", "rb") as f: winner = pickle.load(f)
-    
-    config_path = str(PROJECT_ROOT / "config" / "neat_freeway_config.txt")
-    config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
-                         neat.DefaultSpeciesSet, neat.DefaultStagnation, config_path)
+    render_mode = "human" if render else None
+    raw_env = gym.make(ENV_ID, obs_type="ram", render_mode=render_mode)
+    env = FreewaySpeedWrapper(raw_env, normalize=True, mirror_last_5=True)
 
-    env = gym.make("ALE/Freeway-v5", obs_type="ram", render_mode="human")
-    env = FreewaySpeedWrapper(env, normalize=True, mirror_last_5=True)
+    observation, info = env.reset(seed=seed)
     
-    # IMPORTANT: Create RecurrentNetwork
-    net = neat.nn.RecurrentNetwork.create(winner, config)
-    meanings = env.unwrapped.get_action_meanings()
-    action_map = [meanings.index("NOOP"), meanings.index("UP"), meanings.index("DOWN")]
-
-    print(f"\n--- VISUALIZING RNN WINNER: {run_dir.name} ---")
-    obs, _ = env.reset(seed=42)
+    # IMPORTANT: Use RecurrentNetwork to match training
+    net = neat.nn.RecurrentNetwork.create(genome, config)
+    
     done = False
+    total_score = 0.0
     
     while not done:
-        # RNN update: the network "remembers" previous activations
-        action = action_map[np.argmax(net.activate(obs))]
-        obs, reward, terminated, truncated, _ = env.step(action)
+        output = net.activate(observation)
+        action = np.argmax(output)
+        
+        observation, reward, terminated, truncated, info = env.step(action)
+        total_score += float(reward)
         done = terminated or truncated
-        time.sleep(1/60.0)
+        
+        if render:
+            time.sleep(0.01)
 
     env.close()
+    return total_score
+
+def main():
+    genome = load_latest_winner()
+    config_path = freeway_root / "config" / CONFIG_FILENAME
+    
+    config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
+                         neat.DefaultSpeciesSet, neat.DefaultStagnation,
+                         str(config_path))
+
+    print("\nSTARTING RNN BENCHMARK (SEEDS 0-99)")
+    print("-" * 60)
+
+    results = []
+    for seed in TEST_SEEDS:
+        score = run_simulation(genome, config, seed)
+        results.append({'seed': seed, 'score': score})
+        if (seed + 1) % 10 == 0:
+            print(f"Processed {seed + 1}/100 seeds...")
+
+    scores = [r['score'] for r in results]
+    print("\n" + "="*60)
+    print("FINAL RNN TEST RESULTS")
+    print("="*60)
+    print(f"Average Score over {len(TEST_SEEDS)} seeds: {np.mean(scores):.2f} (std: {np.std(scores):.2f})")
+    print("-" * 30)
+    print(f"Best Seed:  {max(results, key=lambda x: x['score'])['seed']} (Score: {max(scores)})")
+    print("="*60)
+
+    choice = input("\nWatch the best performing game? [y/N]: ").strip().lower()
+    if choice == 'y':
+        best_run = max(results, key=lambda x: x['score'])
+        run_simulation(genome, config, best_run['seed'], render=True)
 
 if __name__ == "__main__":
-    selected = choose_run()
-    run_visualize(selected)
+    main()

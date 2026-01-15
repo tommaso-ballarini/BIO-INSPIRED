@@ -1,119 +1,138 @@
 import os
-import pickle
 import sys
-import numpy as np
 import neat
-import matplotlib.pyplot as plt
+import numpy as np
+import pickle
+import datetime
+import multiprocessing
 import gymnasium as gym
+import ale_py
+import matplotlib.pyplot as plt
+import random
 from pathlib import Path
 
-# --- PATH CONFIGURATION ---
-SCRIPT_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = SCRIPT_DIR.parent
-# IMPORTANT: Config must have feed_forward = False and num_inputs = 128 (for baseline) 
-# or 22 (for wrapper)
-DEFAULT_CONFIG = str(PROJECT_ROOT / "config" / "neat_freeway_config.txt")
-DEFAULT_OUTDIR = PROJECT_ROOT / "results" / "neat_freeway_rnn"
-
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
+# Environment Registration
 try:
     import ale_py
     gym.register_envs(ale_py)
-except Exception: pass
+except Exception:
+    pass
+
+# --- CONFIGURATION ---
+ENV_ID = "ALE/Freeway-v5"
+CONFIG_FILE_NAME = "neat_freeway_config.txt" 
+NUM_GENERATIONS = 50 
+TRAINING_SEED_MIN = 100
+TRAINING_SEED_MAX = 1000000
+MAX_STEPS = 1500
+NUM_WORKERS = max(1, multiprocessing.cpu_count() - 2)
+
+# Path Setup
+SCRIPT_DIR = Path(__file__).resolve().parent
+# IMPORTANT: Adjust parent levels based on your exact folder structure
+FREEWAY_ROOT = SCRIPT_DIR.parent 
+OUTPUT_DIR = FREEWAY_ROOT / "results" / "neat_freeway_rnn"
+CONFIG_PATH = FREEWAY_ROOT / "config" / CONFIG_FILE_NAME
+
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+def eval_genome(genome, config):
+    """
+    Evaluation using Recurrent Neural Network (RNN) and Speed Wrapper.
+    Fitness is the raw Atari score.
+    """
+    import sys
+    from pathlib import Path
+    
+    # Path fix for workers to find the wrapper
+    current_file = Path(__file__).resolve()
+    freeway_root = current_file.parent.parent
+    if str(freeway_root) not in sys.path:
+        sys.path.insert(0, str(freeway_root))
+
+    from wrapper.freeway_wrapper import FreewaySpeedWrapper
+    import gymnasium as gym
+
+    raw_env = gym.make("ALE/Freeway-v5", obs_type="ram", render_mode=None)
+    env = FreewaySpeedWrapper(raw_env, normalize=True, mirror_last_5=True)
+    
+    seed = random.randint(TRAINING_SEED_MIN, TRAINING_SEED_MAX)
+    obs, info = env.reset(seed=seed)
+    
+    # IMPORTANT: Use RecurrentNetwork instead of FeedForward
+    net = neat.nn.RecurrentNetwork.create(genome, config)
+    
+    total_reward = 0.0
+    steps = 0
+    done = False
+    
+    while not done and steps < MAX_STEPS:
+        # RNN activation maintains internal state between steps
+        output = net.activate(obs)
+        action = np.argmax(output) 
+        
+        obs, reward, terminated, truncated, info = env.step(action)
+        
+        total_reward += float(reward)
+        steps += 1
+        done = terminated or truncated
+        
+    env.close()
+    return total_reward
 
 def plot_results(stats, save_dir):
-    """ Generates Fitness and Speciation plots in English. """
-    print(f"\nGenerating plots in: {save_dir}")
+    print(f"Generating plots in: {save_dir}")
+    ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+    
     if stats.most_fit_genomes:
         gen = range(len(stats.most_fit_genomes))
-        best_fit = [c.fitness for c in stats.most_fit_genomes]
-        avg_fit = np.array(stats.get_fitness_mean())
-        
-        plt.figure(figsize=(12, 7))
-        plt.plot(gen, avg_fit, 'b-', label="Average Fitness", alpha=0.6)
-        plt.plot(gen, best_fit, 'r-', label="Best Fitness (Raw Score)", linewidth=2)
-        plt.title("NEAT RNN Evolution - Raw Score")
+        plt.figure(figsize=(10, 6))
+        plt.plot(gen, stats.get_fitness_mean(), 'b-', label="Average Fitness")
+        plt.plot(gen, [c.fitness for c in stats.most_fit_genomes], 'r-', label="Best Fitness")
+        plt.title("Freeway RNN Evolution (Raw Score)")
         plt.xlabel("Generations")
         plt.ylabel("Atari Points")
+        plt.grid(True, linestyle='--', alpha=0.6)
         plt.legend()
-        plt.grid(True, alpha=0.3)
-        plt.savefig(save_dir / "fitness_history.png")
+        plt.savefig(save_dir / f"rnn_fitness_{ts}.png")
         plt.close()
 
-    try:
-        species_sizes = stats.get_species_sizes()
-        if species_sizes:
-            plt.figure(figsize=(12, 7))
-            plt.stackplot(range(len(species_sizes)), np.array(species_sizes).T)
-            plt.title("NEAT RNN Species Evolution")
-            plt.xlabel("Generations")
-            plt.ylabel("Population Size")
-            plt.savefig(save_dir / "speciation_history.png")
-            plt.close()
-    except Exception: pass
-
-def eval_genomes_factory(env_id, max_steps, episodes_per_genome, seed_base):
-    def eval_genomes(genomes, config):
-        # Using Speed Wrapper as default for RNN comparison
-        from wrapper.freeway_wrapper import FreewaySpeedWrapper
-        
-        raw_env = gym.make(env_id, obs_type="ram")
-        env = FreewaySpeedWrapper(raw_env, normalize=True, mirror_last_5=True)
-        
-        meanings = env.unwrapped.get_action_meanings()
-        action_map = [meanings.index("NOOP"), meanings.index("UP"), meanings.index("DOWN")]
-
-        for genome_id, genome in genomes:
-            # IMPORTANT: For RNN we use RecurrentNetwork instead of FeedForwardNetwork
-            net = neat.nn.RecurrentNetwork.create(genome, config)
-            scores = []
-
-            for ep in range(episodes_per_genome):
-                seed = seed_base + genome_id + ep
-                obs, _ = env.reset(seed=seed)
-                total_game_score = 0.0
-
-                for t in range(max_steps):
-                    # RNN maintains state between activations
-                    action_idx = np.argmax(net.activate(obs))
-                    obs, reward, terminated, truncated, _ = env.step(action_map[action_idx])
-                    total_game_score += float(reward)
-
-                    if terminated or truncated: break
-
-                scores.append(total_game_score)
-
-            genome.fitness = np.mean(scores)
-        env.close()
-
-    return eval_genomes
-
-def main():
-    out_path = Path(DEFAULT_OUTDIR)
-    out_path.mkdir(parents=True, exist_ok=True)
+def run_experiment():
+    print("STARTING FREEWAY RNN EXPERIMENT")
     
-    config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
-                         neat.DefaultSpeciesSet, neat.DefaultStagnation, DEFAULT_CONFIG)
+    if not CONFIG_PATH.exists():
+        print(f"Error: Config file not found at {CONFIG_PATH}")
+        return
 
+    config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
+                         neat.DefaultSpeciesSet, neat.DefaultStagnation,
+                         str(CONFIG_PATH))
+    
     p = neat.Population(config)
     p.add_reporter(neat.StdOutReporter(True))
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
-
-    # RNNs usually need more time to stabilize their internal memory
-    eval_func = eval_genomes_factory("ALE/Freeway-v5", 1500, 1, 42)
+    
+    pe = neat.ParallelEvaluator(NUM_WORKERS, eval_genome)
     
     try:
-        winner = p.run(eval_func, n=50)
+        winner = p.run(pe.evaluate, NUM_GENERATIONS)
+        
+        ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        with open(OUTPUT_DIR / f"winner_rnn_{ts}.pkl", "wb") as f:
+            pickle.dump(winner, f)
+        with open(OUTPUT_DIR / f"stats_rnn_{ts}.pkl", "wb") as f:
+            pickle.dump(stats, f)
+            
+        print(f"\nEvolution complete. Best Score: {winner.fitness}")
+        plot_results(stats, OUTPUT_DIR)
+        
     except KeyboardInterrupt:
-        winner = p.best_genome
-
-    with open(out_path / "winner.pkl", "wb") as f: pickle.dump(winner, f)
-    with open(out_path / "stats.pkl", "wb") as f: pickle.dump(stats, f)
-    plot_results(stats, out_path)
-    print(f"\nRNN Training Complete. Results: {out_path}")
+        print("\nTraining interrupted.")
 
 if __name__ == "__main__":
-    main()
+    try:
+        multiprocessing.set_start_method('spawn')
+    except RuntimeError:
+        pass
+    run_experiment()

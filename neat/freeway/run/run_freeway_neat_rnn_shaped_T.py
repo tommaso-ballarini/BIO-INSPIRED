@@ -13,7 +13,7 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 DEFAULT_CONFIG = str(PROJECT_ROOT / "config" / "neat_freeway_config.txt")
 DEFAULT_OUTDIR = PROJECT_ROOT / "results" / "neat_freeway_rnn_shaped_parallel"
 
-# Aggiunge la root al path in modo che i worker possano trovare il wrapper
+# Add the project root so workers can import the wrapper
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -22,13 +22,13 @@ try:
     gym.register_envs(ale_py)
 except Exception: pass
 
-# --- CONFIGURAZIONE GLOBALE PER I WORKER ---
+# --- WORKER CONFIG ---
 ENV_ID = "ALE/Freeway-v5"
 MAX_STEPS = 1500
-EPISODES_PER_GENOME = 3        # Media su 3 partite
-TRAINING_SEED_MIN = 100        # Seed < 100 riservati al test
-TRAINING_SEED_MAX = 100000     # Seed di training
-NUM_WORKERS = 28               # Processi paralleli
+EPISODES_PER_GENOME = 3        # Average over 3 episodes
+TRAINING_SEED_MIN = 100        # Seeds < 100 reserved for test
+TRAINING_SEED_MAX = 100000     # Training seeds
+NUM_WORKERS = 28               # Parallel workers
 
 def plot_results(stats, save_dir):
     """Generates plots including fitness intervals."""
@@ -71,11 +71,10 @@ def eval_genome(genome, config):
     Evaluates a SINGLE genome.
     This function is pickled and sent to worker processes.
     """
-    # Import necessari all'interno del worker
+    # Worker-local imports to support multiprocessing
     import random
     from wrapper.freeway_wrapper import FreewaySpeedWrapper
     
-    # 1. Creazione Ambiente (Mancava nel tuo snippet)
     try:
         raw_env = gym.make(ENV_ID, obs_type="ram")
         env = FreewaySpeedWrapper(raw_env, normalize=True, mirror_last_5=True)
@@ -86,13 +85,11 @@ def eval_genome(genome, config):
     meanings = env.unwrapped.get_action_meanings()
     action_map = [meanings.index("NOOP"), meanings.index("UP"), meanings.index("DOWN")]
 
-    # 2. Creazione Rete Neurale
     net = neat.nn.RecurrentNetwork.create(genome, config)
     fitness_history = []
 
-    # 3. Ciclo Episodi (con Random Seed > 100)
     for ep in range(EPISODES_PER_GENOME):
-        # Seed casuale per evitare overfitting (memorizzazione traffico)
+        # Randomize seed to reduce overfitting to traffic patterns
         seed = random.randint(TRAINING_SEED_MIN, TRAINING_SEED_MAX)
         
         obs, _ = env.reset(seed=seed)
@@ -100,9 +97,8 @@ def eval_genome(genome, config):
         total_atari_score = 0.0
         max_y_reached = 0.0
         collision_count = 0
-        prev_y = obs[0] # Y normalizzata iniziale
+        prev_y = obs[0] # Initial normalized Y
 
-        # 4. Game Loop (Mancava nel tuo snippet)
         for t in range(MAX_STEPS):
             outputs = net.activate(obs)
             action_idx = np.argmax(outputs)
@@ -112,19 +108,18 @@ def eval_genome(genome, config):
             current_y = obs[0]
             total_atari_score += float(reward)
 
-            # Tracking progressi
+            # Track progress
             if current_y > max_y_reached:
                 max_y_reached = current_y
             
-            # Rilevamento collisione (Y scende bruscamente)
+            # Collision heuristic (sudden Y drop)
             if current_y < prev_y - 0.05:
                 collision_count += 1
             
             prev_y = current_y
             if terminated or truncated: break
 
-        # 5. Calcolo Fitness (Shaped)
-        # Pesi: Score (50), Progresso (10), Collisioni (-0.5)
+        # Shaped fitness weights: score (50), progress (10), collisions (-0.5)
         shaped_fit = (total_atari_score * 50.0) + (max_y_reached * 10.0) - (collision_count * 0.5)
         fitness_history.append(shaped_fit)
 
@@ -153,7 +148,7 @@ def main():
         print("\nTraining interrupted by user. Saving current best.")
         winner = p.best_genome
 
-    # Salvataggio
+    # Save results
     with open(out_path / "winner.pkl", "wb") as f: pickle.dump(winner, f)
     with open(out_path / "stats.pkl", "wb") as f: pickle.dump(stats, f)
     plot_results(stats, out_path)
