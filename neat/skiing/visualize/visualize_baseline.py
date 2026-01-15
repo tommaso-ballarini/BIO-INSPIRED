@@ -139,12 +139,19 @@ def main():
     native_scores = [r['native'] for r in results]
     custom_scores = [r['custom'] for r in results]
 
-    best_native_run = max(results, key=lambda x: x['native'])
-    best_custom_run = max(results, key=lambda x: x['custom'])
-    worst_native_run = min(results, key=lambda x: x['native'])
-
     avg_native = np.mean(native_scores)
     avg_custom = np.mean(custom_scores)
+    
+    completed_runs = [r for r in results if r['custom'] > 9500]
+    
+    if completed_runs:
+        best_overall_run = max(completed_runs, key=lambda x: x['native'])
+        best_label = "🏆 BEST COMPLETED RUN (Custom > 9500)"
+    else:
+        best_overall_run = max(results, key=lambda x: x['custom'])
+        best_label = "⚠️ BEST CUSTOM (No run > 9500 found)"
+
+    worst_native_run = min(results, key=lambda x: x['native'])
 
     # 4. Final Report
     print("\n" + "="*60)
@@ -154,18 +161,22 @@ def main():
     print(f"  ❄️  Native Score:   {avg_native:.2f}  (± {np.std(native_scores):.2f})")
     print(f"  🎯  Custom Fitness: {avg_custom:.2f}  (± {np.std(custom_scores):.2f})")
     print("-" * 30)
-    print("🏆 HALL OF FAME:")
-    print(f"  BEST NATIVE (Seed {best_native_run['seed']}):  {best_native_run['native']:.1f}")
-    print(f"  BEST CUSTOM (Seed {best_custom_run['seed']}):  {best_custom_run['custom']:.1f}")
+    
+    print("🏅 HALL OF FAME:")
+    print(f"  {best_label}:")
+    print(f"     -> Seed {best_overall_run['seed']}")
+    print(f"     -> Native: {best_overall_run['native']:.1f}")
+    print(f"     -> Custom: {best_overall_run['custom']:.1f}")
     print("-" * 30)
-    print(f"💩 WORST RUN  (Seed {worst_native_run['seed']}):  {worst_native_run['native']:.1f}")
+    
+    print(f"💩 WORST RUN (Seed {worst_native_run['seed']}): {worst_native_run['native']:.1f}")
     print("="*60)
 
     # 5. Visualization Prompt
-    choice = input(f"\n🎥 Watch the BEST game (Seed {best_native_run['seed']})? [y/N]: ").strip().lower()
+    choice = input(f"\n🎥 Watch the BEST COMPLETED game (Seed {best_overall_run['seed']})? [y/N]: ").strip().lower()
     if choice == 'y':
-        print(f"Replaying Seed {best_native_run['seed']}...")
-        run_simulation(genome, config, best_native_run['seed'], render=True)
+        print(f"Replaying Seed {best_overall_run['seed']}...")
+        run_simulation(genome, config, best_overall_run['seed'], render=True)
         print("Done.")
     else:
         print("Skipping visualization.")

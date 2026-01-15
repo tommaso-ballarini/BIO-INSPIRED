@@ -5,11 +5,12 @@ from ocatari.ram.skiing import Player, Flag, Tree
 
 class BioSkiingOCAtariWrapper(gym.Wrapper):
     """
-    BioSkiingOCAtariWrapper - MAGNETIC GUIDANCE
+    OCAtari Skiing Wrapper.
     
-    Improvements:
-    1. MAGNET REWARD: Rewards alignment with target FRAME BY FRAME.
-    2. COLLISION PENALTY: Severely punishes contact with trees/flags.
+    Features:
+    - Continuous reward for alignment with the target gate.
+    - Penalties for collisions with trees/flags and stagnation.
+    - Simplified 9-value observation vector.
     """
     
     def __init__(self, render_mode=None):
@@ -47,19 +48,19 @@ class BioSkiingOCAtariWrapper(gym.Wrapper):
         player = [o for o in objects if isinstance(o, Player)]
         p = player[0] if player else None
 
-        # --- RECALCULATE OBSERVATION (Needed for magnetic reward) ---
+        # Recalculate observation for reward logic
         current_obs = self._get_smart_obs() 
         target_delta_x = current_obs[3]
         target_exists = current_obs[5]
         
         custom_reward = 0.0
         
-        # 1. GATE BONUS (The Jackpot)
+        # 1. Gate Completion Bonus
         if current_gates < self.prev_gates:
             custom_reward += 500.0
             self.stuck_counter = 0
             
-        # 2. MAGNET REWARD (New Guidance)
+        # 2. Alignment Reward
         if target_exists > 0.5:
             alignment_error = abs(target_delta_x)
             
@@ -69,7 +70,7 @@ class BioSkiingOCAtariWrapper(gym.Wrapper):
                 # The more misaligned, small penalty to urge correction
                 custom_reward -= (alignment_error * 0.5)
 
-        # 3. COLLISION DETECTION (New Punishment)
+        # 3. Collision Penalty
         others = [o for o in objects if isinstance(o, (Tree, Flag)) and not isinstance(o, Player)]
         if p:
             for o in others:
@@ -81,7 +82,7 @@ class BioSkiingOCAtariWrapper(gym.Wrapper):
             if p.x < 10 or p.x > 150:
                 custom_reward -= 5.0
             
-            # Anti-Camping
+            # Stagnation Penalty
             if abs(p.x - self.prev_x) < 0.1:
                 self.stuck_counter += 1
                 custom_reward -= 1.0 
@@ -91,7 +92,7 @@ class BioSkiingOCAtariWrapper(gym.Wrapper):
             
             self.prev_x = p.x
 
-        custom_reward -= 0.1 
+        custom_reward -= 0.2 # Time penalty per step
         
         if self.stuck_counter > 100:
             truncated = True
@@ -112,13 +113,13 @@ class BioSkiingOCAtariWrapper(gym.Wrapper):
         if not player: return obs
         p = player[0]
         
-        # 1. PLAYER
+        # 1. Player State
         obs[0] = (p.x - 80) / 80.0
         orientation = getattr(p, "orientation", 0)
         obs[1] = (orientation - 128.0) / 128.0
         obs[2] = (p.x - self.prev_x)
         
-        # 2. TARGET TUNNEL
+        # 2. Target Gate
         upcoming_flags = sorted([f for f in flags if f.y > p.y], key=lambda f: f.y)
         gate_found = False
         target_x = 0
@@ -134,7 +135,6 @@ class BioSkiingOCAtariWrapper(gym.Wrapper):
                 break
         
         if gate_found:
-            # Calculate Normalized Delta
             obs[3] = (target_x - p.x) / 80.0 
             obs[4] = target_dist / 200.0     
             obs[5] = 1.0                     
@@ -143,7 +143,7 @@ class BioSkiingOCAtariWrapper(gym.Wrapper):
             obs[4] = 1.0 
             obs[5] = 0.0 
             
-        # 3. THREATS
+        # 3. Nearest Obstacle
         threats = trees + flags
         upcoming_threats = [t for t in threats if t.y > p.y]
         if upcoming_threats:

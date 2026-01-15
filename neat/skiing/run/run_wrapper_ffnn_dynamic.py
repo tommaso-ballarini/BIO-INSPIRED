@@ -7,6 +7,7 @@ import multiprocessing
 import gymnasium as gym
 import numpy as np
 import matplotlib.pyplot as plt
+import random
 
 # Add path to import the wrapper
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -22,6 +23,8 @@ except ImportError:
 # --- CONFIGURATION ---
 NUM_GENERATIONS = 150
 NUM_WORKERS = max(1, multiprocessing.cpu_count() - 2)
+TRAINING_SEED_MIN = 100      # Seed < 100 reserved for testing
+TRAINING_SEED_MAX = 100000 
 CONFIG_FILENAME = "config_wrapper_ffnn_dynamic.txt"
 CHECKPOINT_PREFIX = "neat-checkpoint-"
 
@@ -38,7 +41,9 @@ def eval_genome(genome, config, curriculum_mode="beginner"):
     except:
         env = BioSkiingOCAtariWrapper(render_mode=None, curriculum_mode=curriculum_mode)
           
-    observation, info = env.reset()
+    current_seed = random.randint(TRAINING_SEED_MIN, TRAINING_SEED_MAX)
+
+    observation, info = env.reset(seed=current_seed)
     
     # Create Neural Network (Feed-Forward for memory)
     net = neat.nn.FeedForwardNetwork.create(genome, config)

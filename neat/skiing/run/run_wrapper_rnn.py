@@ -7,6 +7,7 @@ import multiprocessing
 import gymnasium as gym
 import numpy as np
 import matplotlib.pyplot as plt
+import random
 
 # Add path to import the wrapper
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -14,16 +15,17 @@ parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
 try:
-    from wrapper.wrapper_rnn import BioSkiingOCAtariWrapper
+    from wrapper.wrapper import BioSkiingOCAtariWrapper
 except ImportError:
-    print("Error: 'wrapper/wrapper_rnn.py' not found")
+    print("Error: 'wrapper/wrapper.py' not found")
     sys.exit(1)
 
 # --- CONFIGURATION ---
 NUM_GENERATIONS = 150
 NUM_WORKERS = max(1, multiprocessing.cpu_count() - 2)
 CONFIG_FILENAME = "config_wrapper_rnn.txt"
-
+TRAINING_SEED_MIN = 100      # Seed < 100 reserved for testing
+TRAINING_SEED_MAX = 100000 
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 RESULTS_DIR = os.path.join(parent_dir, 'evolution_results', 'wrapper_rnn_run')
 
@@ -38,8 +40,10 @@ def eval_genome(genome, config):
     except:
         env = BioSkiingOCAtariWrapper(render_mode=None)
         
-    observation, info = env.reset()
-    
+    current_seed = random.randint(TRAINING_SEED_MIN, TRAINING_SEED_MAX)
+
+    observation, info = env.reset(seed=current_seed)
+
     # Create Neural Network (Recurrent for memory)
     net = neat.nn.RecurrentNetwork.create(genome, config)
     
