@@ -13,9 +13,6 @@ def get_action(observation):
     # obs[3]: Target Delta X (The most important one!)
     
     # --- CURRENT LOGIC: RANDOM ---
-    # Action 0: NOOP (Straight/Glide)
-    # Action 1: RIGHT
-    # Action 2: LEFT
     
     action = random.choice([0, 1, 2])
     

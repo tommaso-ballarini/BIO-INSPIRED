@@ -11,19 +11,19 @@ except ImportError:
 
 class SkiingOCAtariWrapper(gym.Wrapper):
     """
-    SkiingOCAtariWrapper - Fedele all'implementazione NEAT originale.
-    Include: Magnet Reward, Gate Bonus, Collision Penalty, Anti-Camping.
+    SkiingOCAtariWrapper - Similar to original NEAT implementation.
+    Includes: Magnet Reward, Gate Bonus, Collision Penalty, Anti-Camping.
     """
     
     def __init__(self, render_mode=None):
         if not OCATARI_AVAILABLE:
-            raise ImportError("OCAtari non installato. Installa con pip install ocatari[all]")
+            raise ImportError("OCAtari not installed. Install via pip install ocatari[all]")
             
         self.env = OCAtari("ALE/Skiing-v5", mode="ram", hud=False, render_mode=render_mode)
         super().__init__(self.env)
         
         self.input_shape = 9
-        # Definiamo lo spazio per compatibilità, anche se l'LLM userà i valori grezzi
+        # Define space for compatibility, though LLM uses raw values
         self.observation_space = Box(low=-1.0, high=1.0, shape=(self.input_shape,), dtype=np.float32)
         
         self.prev_gates = 32
@@ -43,10 +43,9 @@ class SkiingOCAtariWrapper(gym.Wrapper):
         return self._get_smart_obs(), info
 
     def step(self, action):
-        # Eseguiamo lo step nell'ambiente reale
+        # Execute step in real env
         obs, native_reward, terminated, truncated, info = self.env.step(action)
         
-        # Salviamo il reward originale per logging (opzionale)
         info['native_reward'] = native_reward
         
         ram = self.env._env.unwrapped.ale.getRAM()
@@ -56,7 +55,7 @@ class SkiingOCAtariWrapper(gym.Wrapper):
         player = [o for o in objects if isinstance(o, Player)]
         p = player[0] if player else None
 
-        # --- CALCOLO STATO (Osservazione intelligente) ---
+        # --- STATE CALCULATION (Smart Observation) ---
         current_obs = self._get_smart_obs() 
         target_delta_x = current_obs[3]
         target_exists = current_obs[5]
@@ -68,7 +67,7 @@ class SkiingOCAtariWrapper(gym.Wrapper):
             custom_reward += 500.0
             self.stuck_counter = 0
             
-        # 2. MAGNET REWARD (+1.0 se allineato)
+        # 2. MAGNET REWARD (+1.0 if aligned)
         if target_exists > 0.5:
             alignment_error = abs(target_delta_x)
             if alignment_error < 0.1:
@@ -82,9 +81,9 @@ class SkiingOCAtariWrapper(gym.Wrapper):
             for o in others:
                 dist = abs(p.x - o.x) + abs(p.y - o.y) 
                 if dist < 5: 
-                    custom_reward -= 10.0 # Collisione
+                    custom_reward -= 10.0 # Collision
                     
-            # Penalità Bordi
+            # Boundary Penalty
             if p.x < 10 or p.x > 150:
                 custom_reward -= 5.0
             
@@ -98,7 +97,7 @@ class SkiingOCAtariWrapper(gym.Wrapper):
             
             self.prev_x = p.x
 
-        custom_reward -= 0.2 # Penalità tempo leggera
+        custom_reward -= 0.2 # Slight time penalty
         
         if self.stuck_counter > 100:
             truncated = True
@@ -106,7 +105,7 @@ class SkiingOCAtariWrapper(gym.Wrapper):
 
         self.prev_gates = current_gates
         
-        # Ritorniamo custom_reward come reward principale per guidare l'evoluzione
+        # Return custom_reward as main reward to guide evolution
         return current_obs, custom_reward, terminated, truncated, info
 
     def _get_smart_obs(self):
@@ -126,7 +125,7 @@ class SkiingOCAtariWrapper(gym.Wrapper):
         obs[1] = (orientation - 128.0) / 128.0
         obs[2] = (p.x - self.prev_x)
         
-        # 2. TARGET TUNNEL (Logica geometrica originale)
+        # 2. TARGET TUNNEL 
         upcoming_flags = sorted([f for f in flags if f.y > p.y], key=lambda f: f.y)
         gate_found = False
         target_x = 0
@@ -142,7 +141,7 @@ class SkiingOCAtariWrapper(gym.Wrapper):
                 break
         
         if gate_found:
-            obs[3] = (target_x - p.x) / 80.0 # Delta X (Cruciale per il magnete)
+            obs[3] = (target_x - p.x) / 80.0 # Delta X (Crucial for magnet)
             obs[4] = target_dist / 200.0     
             obs[5] = 1.0                     
         else:

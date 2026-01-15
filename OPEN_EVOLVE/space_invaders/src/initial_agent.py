@@ -12,13 +12,7 @@ def get_action(observation):
     # obs[0]: Player X
     # obs[1-5]: Proximity Sensors (S1..S5)
     # obs[11]: Target Alien Relative X
-    
-    # --- ACTIONS ---
-    # 0: NOOP
-    # 1: FIRE
-    # 2: RIGHT
-    # 3: LEFT
-    
+
     # Random choice
     action = random.choice([0, 1, 2, 3])
     

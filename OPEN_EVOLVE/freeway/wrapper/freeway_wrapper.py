@@ -3,8 +3,7 @@ import gymnasium as gym
 
 class FreewaySpeedWrapper(gym.ObservationWrapper):
     """
-    Freeway RAM Wrapper con Velocità - 22 features.
-    CODICE ORIGINALE (Non modificato nella logica di estrazione).
+    Freeway RAM Wrapper with Velocity - 22 features.
     """
 
     CHICKEN_Y_IDX = 14
@@ -42,7 +41,7 @@ class FreewaySpeedWrapper(gym.ObservationWrapper):
     def observation(self, obs):
         obs = np.asarray(obs)
         
-        # 1. Estrazione dati base
+        # 1. Base data extraction
         chicken_y = float(obs[self.CHICKEN_Y_IDX])
         collision_state = 1.0 if obs[self.COLLISION_STATE_IDX] > 0 else 0.0
         current_cars_x = obs[self.CARS_X_START:self.CARS_X_START + self.N_CARS].astype(np.float32)
@@ -52,7 +51,7 @@ class FreewaySpeedWrapper(gym.ObservationWrapper):
             current_cars_x[5:] = self.MAX_CAR_X - current_cars_x[5:]
             np.clip(current_cars_x, 0.0, self.MAX_CAR_X, out=current_cars_x)
 
-        # 3. Calcolo Velocità
+        # 3. Velocity calculation
         if self.prev_cars_x is None:
             velocities = np.zeros(self.N_CARS, dtype=np.float32)
         else:
@@ -61,16 +60,16 @@ class FreewaySpeedWrapper(gym.ObservationWrapper):
         
         self.prev_cars_x = current_cars_x.copy()
 
-        # 4. Assemblaggio
+        # 4. Assembly
         feats = np.zeros((self.num_features,), dtype=np.float32)
         feats[0] = chicken_y
         feats[1] = collision_state
         feats[2:12] = current_cars_x
         feats[12:22] = velocities
 
-        # 5. Normalizzazione
+        # 5. Normalization
         if self.normalize:
-            # Normalizzazione invertita: 0.0 = fondo, 1.0 = traguardo
+            # Inverted Norm: 0.0 = bottom, 1.0 = goal
             feats[0] = (self.MAX_CHICKEN_Y - chicken_y) / (self.MAX_CHICKEN_Y - self.MIN_CHICKEN_Y)
             feats[2:12] /= self.MAX_CAR_X
             feats[12:22] = (feats[12:22] / 2.0)
@@ -82,16 +81,16 @@ class FreewaySpeedWrapper(gym.ObservationWrapper):
 
 class FreewayEvoWrapper(FreewaySpeedWrapper):
     """
-    Wrapper esteso per l'Evolution Loop.
-    Aggiunge:
-    1. Reward Shaping (piccolo bonus per salire, penalità per collisione).
-    2. Anti-Camping (timeout se il pollo sta fermo).
+    Extended Wrapper for Evolution Loop.
+    Adds:
+    1. Reward Shaping (bonus for moving up, penalty for collision).
+    2. Anti-Camping (timeout if chicken stays still).
     """
     def __init__(self, env):
         super().__init__(env, normalize=True, mirror_last_5=True)
         self.prev_y = 0.0
         self.stuck_counter = 0
-        self.max_stuck_steps = 150  # Se stai fermo per 150 frame, muori
+        self.max_stuck_steps = 150  # Max frames static before timeout
 
     def reset(self, **kwargs):
         obs, info = super().reset(**kwargs)
@@ -100,57 +99,41 @@ class FreewayEvoWrapper(FreewaySpeedWrapper):
         return obs, info
 
     def step(self, action):
-        # Mappatura azioni per l'agente (0: NOOP, 1: UP, 2: DOWN)
-        # Freeway ALE accetta: 0=NOOP, 1=FIRE(acceleration), 2=UP, 3=RIGHT... 
-        # Mappatura standard ALE/Freeway-v5 (visto che usiamo 'ram'):
-        # 0: NOOP, 1: UP, 2: DOWN (Usando get_action_meanings() o la logica NEAT fornita: UP=1, DOWN=2 nel codice NEAT)
-        
-        # Mapping esplicito per sicurezza:
-        real_action = 0
-        if action == 1: real_action = 1 # UP (ale_py default usually: 0 NOOP, 1 UP, 2 RIGHT...) 
-        # Nota: In ALE "Up" è spesso indice 2 o 1 dipendentemente dalla versione. 
-        # Nello script NEAT usavano: meanings.index("UP").
-        # Per sicurezza usiamo un mapping standard per Freeway-v5 se non specificato altrimenti:
-        # NOOP=0, UP=1, DOWN=2. (Assumendo l'uso del wrapper standard)
+        # ALE Action Mapping: 0: NOOP, 1: UP, 2: DOWN (Standard assumption)
         
         obs, native_reward, terminated, truncated, info = self.env.step(action)
-        # Nota: Poiché ereditiamo da ObservationWrapper, 'step' non è automaticamente wrappato per 
-        # restituire l'osservazione modificata se non chiamiamo observation().
-        # Gymnasium ObservationWrapper sovrascrive step per applicare observation() automaticamente? 
-        # No, ObservationWrapper modifica solo reset e step(return values).
         
-        # Recuperiamo l'osservazione processata (le 22 features)
-        processed_obs = self.observation(obs) # obs qui è la RAM raw ritornata da env.step
+        # Process observation (extract the 22 features)
+        processed_obs = self.observation(obs)
         
         # --- REWARD SHAPING ---
-        current_y = processed_obs[0] # obs[0] è la Y normalizzata (0=start, 1=goal)
+        current_y = processed_obs[0] # obs[0] is normalized Y
         
         custom_reward = 0.0
         
-        # 1. Native Reward (Punto pieno quando attraversa)
+        # 1. Native Reward (Full point on crossing)
         if native_reward > 0:
-            custom_reward += 100.0 # Grande bonus per il successo reale
+            custom_reward += 100.0 # Big bonus for success
             self.stuck_counter = 0
 
-        # 2. Shaping Progressivo (Incoraggia a salire)
+        # 2. Progressive Shaping (Incentivize moving up)
         delta_y = (current_y - self.prev_y)
         if delta_y > 0:
-            custom_reward += (delta_y * 10.0) # Piccolo incentivo per ogni passo avanti
+            custom_reward += (delta_y * 10.0) 
         
-        # 3. Collision Penalty (Implicita perché ti spinge giù, ma aggiungiamo un feedback)
-        # Se obs[1] (collision) è attivo e prima non lo era (opzionale), o semplicemente se siamo scesi molto
-        if delta_y < -0.05: # Sei stato spinto indietro significativamente
+        # 3. Collision Penalty (Detected via sudden drop in Y)
+        if delta_y < -0.05: 
             custom_reward -= 1.0
 
         # 4. Anti-Camping Logic
         if abs(delta_y) < 0.001:
             self.stuck_counter += 1
-            custom_reward -= 0.01 # Leggera penalità per l'ozio
+            custom_reward -= 0.01 # Slight penalty for idleness
         else:
             self.stuck_counter = 0
         
         if self.stuck_counter > self.max_stuck_steps:
-            truncated = True # Uccidi l'episodio se campeggia
+            truncated = True # Kill episode if camping
             custom_reward -= 10.0
             
         self.prev_y = current_y

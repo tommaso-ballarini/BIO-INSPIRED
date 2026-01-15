@@ -6,44 +6,45 @@ import numpy as np
 import neat
 import matplotlib.pyplot as plt
 import gymnasium as gym
+import ale_py
+from pathlib import Path
 
-# Import OCAtari per l'estrazione oggetti
+# --- PATH CONFIGURATION ---
+current_dir = Path(__file__).parent.resolve()
+project_root = current_dir.parent
+if str(project_root) not in sys.path:
+    sys.path.append(str(project_root))
+
+# --- IMPORTS ---
 try:
     from ocatari.core import OCAtari
 except ImportError:
-    print("❌ ERRORE: Libreria OCAtari non installata. Serve per il wrapper a oggetti.")
+    print("❌ ERROR: OCAtari library not installed.")
     sys.exit(1)
 
-# --- GESTIONE PERCORSI ---
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(current_dir)
-if project_root not in sys.path:
-    sys.path.append(project_root)
-
-# Import del Wrapper specifico
 try:
     from wrapper.wrapper_si_columns_RNN import SpaceInvadersColumnWrapper
 except ImportError:
-    print("❌ ERRORE: Non trovo 'wrapper_si_columns.py' nella cartella wrapper!")
+    print("❌ ERROR: 'wrapper_si_columns_RNN.py' not found in wrapper folder!")
     sys.exit(1)
 
-# --- CONFIGURAZIONI ---
-CONFIG_PATH = os.path.join(project_root, 'config', 'config_si_columns_RNN.txt')
-RESULTS_DIR = os.path.join(project_root, 'results')
-os.makedirs(RESULTS_DIR, exist_ok=True)
+# --- GLOBAL SETTINGS ---
+CONFIG_PATH = project_root / 'config' / 'config_si_columns_RNN.txt'
+RESULTS_DIR = project_root / 'results'
+RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 GAME_NAME = "SpaceInvadersNoFrameskip-v4"
 GENERATIONS = 30
 FIXED_SEED = 42 
 
-print(f"✅ Configurazione: {GAME_NAME} con Column Wrapper (RNN Mode)")
-print(f"🔒 Seed Fissato a: {FIXED_SEED}")
+print(f"✅ Env Config: {GAME_NAME} with Column Wrapper (RNN Mode)")
+print(f"🔒 Fixed Seed: {FIXED_SEED}")
 
-# --- FUNZIONI DI PLOTTING (Adattate dalla Baseline) ---
+# --- PLOTTING FUNCTIONS ---
 
 def plot_stats(statistics):
-    """ Grafico Fitness Media e Migliore """
-    print("📊 Generazione grafico Fitness...")
+    """ Plots Average and Best Fitness. """
+    print("📊 Generating Fitness Plot...")
     if not statistics.most_fit_genomes:
         return
 
@@ -55,20 +56,22 @@ def plot_stats(statistics):
     plt.plot(generation, best_fitness, 'r-', label="Best Fitness")
     plt.plot(generation, avg_fitness, 'b-', label="Avg Fitness")
     plt.title(f"Columns RNN Training (Seed {FIXED_SEED})")
-    plt.xlabel("Generazioni")
+    plt.xlabel("Generations")
     plt.ylabel("Fitness (Score)")
     plt.grid()
     plt.legend()
-    # Nome file specifico per Columns
-    plt.savefig(os.path.join(RESULTS_DIR, "fitness_columns_rnn_fit.png"))
+    
+    try:
+        output_path = RESULTS_DIR / "fitness_columns_rnn_fit.png"
+        plt.savefig(output_path)
+    except Exception as e:
+        print(f"❌ Fitness plot error: {e}")
     plt.close()
 
 def plot_species(statistics):
-    """ Speciation Graph (Stacked Plot) - Correct Version """
+    """ Generates Speciation Stackplot. """
     print("📊 Generating Speciation Plot...")
     
-    # Official NEAT method to get the correct counts
-    # This fixes the "dict object has no attribute members" error
     species_sizes = statistics.get_species_sizes()
     
     if not species_sizes:
@@ -76,52 +79,51 @@ def plot_species(statistics):
         return
 
     num_generations = len(species_sizes)
-    
-    # Transpose the matrix to fit stackplot (Rows=Species, Cols=Generations)
     curves = np.array(species_sizes).T
 
     plt.figure(figsize=(12, 8))
     ax = plt.subplot(111)
     
     try:
-        # Use stackplot for the filled area effect
         ax.stackplot(range(num_generations), *curves)
         
         plt.title("Evolution of Species (Speciation)")
         plt.ylabel("Number of Genomes per Species")
         plt.xlabel("Generations")
-        plt.margins(0, 0) # Removes white side margins
+        plt.margins(0, 0)
         
-        # Ensure RESULTS_DIR is defined in your global scope
-        output_path = os.path.join(RESULTS_DIR, "speciation.png")
+        output_path = RESULTS_DIR / "speciation.png"
         plt.savefig(output_path)
-        print(f"✅ Speciation plot saved to: {output_path}")
+        print(f"✅ Speciation plot saved to: {output_path.name}")
         
     except Exception as e:
-        print(f"❌ Error during plotting: {e}")
-        # Debug info
-        print(f"   Curves shape: {curves.shape if hasattr(curves, 'shape') else 'Unknown'}")
+        print(f"❌ Plotting error: {e}")
     
     plt.close()
 
-# --- LOGICA DI VALUTAZIONE ---
+# --- EVALUATION LOGIC ---
 
 def eval_genome(genome, config):
+    # 1. Network: Recurrent (RNN)
     net = neat.nn.RecurrentNetwork.create(genome, config)
     
-    # Init standard
+    # 2. Env Setup (OCAtari + Wrapper)
     try:
-        import ale_py
+        import ale_py # Re-import for safety in subprocess
         env = OCAtari(GAME_NAME, mode="ram", hud=False, render_mode=None)
-    except Exception:
+    except Exception as e:
+        print(f"⚠️ OCAtari init error: {e}")
         return 0.0
     
-    from wrapper.wrapper_si_columns_RNN import SpaceInvadersColumnWrapper
+    # Apply Column Wrapper (10 columns, skip 4 frames)
     env = SpaceInvadersColumnWrapper(env, n_columns=10, skip=4)
     
+    # 3. Deterministic Reset
     observation, info = env.reset(seed=FIXED_SEED)
     
+    # Check Input Size (Expected 32 for RNN config)
     if len(observation) != 32:
+        print(f"⚠️ SIZE ERROR: Expected 32, got {len(observation)}")
         env.close()
         return 0.0
 
@@ -133,23 +135,26 @@ def eval_genome(genome, config):
     
     # --- TRACKING ---
     x_positions = [] 
-    shots_fired = 0 # Contatore spari
+    shots_fired = 0 
 
     while not (terminated or truncated) and steps < max_steps:
         inputs = observation
+        
+        # RNN Activation
         outputs = net.activate(inputs)
         action = np.argmax(outputs)
         
-        # 1 = FIRE in Space Invaders
+        # Action 1 = FIRE in Space Invaders
         if action == 1:
             shots_fired += 1
-
+        
         observation, reward, terminated, truncated, info = env.step(action)
         total_reward += reward
         
-        # Campionamento posizione (ogni 10 step)
+        # Sample position (every 10 steps)
         if steps % 10 == 0:
             try:
+                # RAM[28] is usually player X position in Space Invaders
                 player_x = env.unwrapped.ale.getRAM()[28]
                 x_positions.append(player_x)
             except:
@@ -159,49 +164,47 @@ def eval_genome(genome, config):
 
     env.close()
 
-    # --- CALCOLO FITNESS (Modificato) ---
+    # --- FITNESS CALCULATION (Modified) ---
     
     fitness = total_reward
     
-    # 1. PENALITÀ SPAM (Il consiglio che chiedevi)
-    # Togliamo 1 punto per ogni 5 spari (0.2 per sparo).
-    # Esempio: Spari 100 colpi a vuoto? -50 punti fitness.
-    # Uccidi un alieno (10 pti) con 3 colpi? Guadagni 10 - 1.5 = 8.5 (Conviene!)
+    # 1. SPAM PENALTY
+    # Subtract 0.2 points per shot. Example: 100 misses = -20 fitness.
+    # Killing an alien (10-30 pts) is still net positive if efficient.
     fitness -= (shots_fired * 0.2)
 
-    # 2. PENALITÀ "CAMPER" BASATA SUL RANGE (Più robusta della std dev)
+    # 2. ANTI-CAMPING PENALTY
     if len(x_positions) > 5:
         min_x = np.min(x_positions)
         max_x = np.max(x_positions)
-        coverage = max_x - min_x # Quanti pixel di larghezza ha coperto
+        coverage = max_x - min_x 
         
-        # Lo schermo è largo circa 160. Chiediamo di coprirne almeno 40 (25%)
+        # Screen width ~160. Require covering at least 40px (25%)
         if coverage < 40:
-            # Se non ti sei spostato di almeno 40 pixel in totale, dimezzo il punteggio.
-            # Questo uccide la strategia "sto fermo in un angolo".
+            # Drastic penalty for staying in one spot (50% reduction)
             fitness = fitness * 0.5
         else:
-            # BONUS: Se ti muovi molto, ti do un piccolo incentivo
-            # Premia l'esplorazione anche se muori presto
+            # Bonus for movement/exploration
             fitness += 20 
 
-    # Evitiamo fitness negativa (NEAT a volte si rompe con fitness < 0)
+    # Avoid negative fitness (NEAT sometimes breaks with fitness < 0)
     return max(0.1, fitness)
+
 # --- MAIN ---
 
 def run_columns():
-    print(f"📂 Caricamento config: {CONFIG_PATH}")
-    if not os.path.exists(CONFIG_PATH):
-        print(f"❌ Config non trovato! Crea {CONFIG_PATH} con num_inputs=32 e feed_forward=False.")
+    print(f"📂 Loading Config: {CONFIG_PATH}")
+    if not CONFIG_PATH.exists():
+        print(f"❌ Config not found! Create {CONFIG_PATH} with num_inputs=32 and feed_forward=False.")
         return
 
     config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
                          neat.DefaultSpeciesSet, neat.DefaultStagnation,
-                         CONFIG_PATH)
+                         str(CONFIG_PATH))
 
-    # Verifica veloce config
+    # Verify Config
     if config.genome_config.num_inputs != 32:
-        print(f"❌ ERRORE CONFIG: num_inputs è {config.genome_config.num_inputs}, deve essere 32!")
+        print(f"❌ CONFIG ERROR: num_inputs is {config.genome_config.num_inputs}, must be 32!")
         return
 
     p = neat.Population(config)
@@ -209,11 +212,13 @@ def run_columns():
     p.add_reporter(neat.StdOutReporter(True))
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
-    p.add_reporter(neat.Checkpointer(10, filename_prefix=os.path.join(RESULTS_DIR, "neat-col-checkpoint-")))
+    
+    checkpoint_prefix = RESULTS_DIR / "neat-col-rnn-checkpoint-"
+    p.add_reporter(neat.Checkpointer(10, filename_prefix=str(checkpoint_prefix)))
 
-    # Parallelismo
+    # Multiprocessing
     num_workers = max(1, multiprocessing.cpu_count() - 2)
-    print(f"🚀 Avvio Training Columns RNN su {num_workers} processi...")
+    print(f"🚀 Starting Columns RNN Training on {num_workers} workers...")
     
     pe = neat.ParallelEvaluator(num_workers, eval_genome)
     
@@ -221,20 +226,20 @@ def run_columns():
         winner = p.run(pe.evaluate, GENERATIONS)
         
         best_ever = stats.best_genome()
-        print(f"\n🏆 Fine Training Columns.")
+        print(f"\n🏆 Training Complete.")
         print(f"💎 Best Ever Fitness: {best_ever.fitness}")
         
-        # Salvataggio Genoma
-        with open(os.path.join(RESULTS_DIR, 'columns_winner_RNN_fit.pkl'), 'wb') as f:
+        # Save Winner
+        with open(RESULTS_DIR / 'columns_winner_RNN_fit.pkl', 'wb') as f:
             pickle.dump(best_ever, f)
-        print(f"💾 Salvato in: columns_winner_RNN_fit.pkl")
+        print(f"💾 Saved to: columns_winner_RNN_fit.pkl")
 
-        # --- GENERAZIONE GRAFICI ---
+        # Generate Plots
         plot_stats(stats)
         plot_species(stats)
         
     except Exception as e:
-        print(f"\n❌ ERRORE CRITICO: {e}")
+        print(f"\n❌ CRITICAL ERROR: {e}")
         import traceback
         traceback.print_exc()
 

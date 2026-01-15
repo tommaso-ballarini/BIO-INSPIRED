@@ -7,7 +7,7 @@ import random
 import gymnasium as gym
 from pathlib import Path
 
-# --- SETUP IMPORT WRAPPER ---
+# --- WRAPPER SETUP ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
 wrapper_dir = os.path.abspath(os.path.join(current_dir, '..', 'wrapper'))
 sys.path.append(wrapper_dir)
@@ -15,14 +15,14 @@ sys.path.append(wrapper_dir)
 try:
     from freeway_wrapper import FreewayEvoWrapper
 except ImportError as e:
-    print(f"Errore Import Wrapper: {e}")
+    print(f"Wrapper Import Error: {e}")
     sys.exit(1)
 
 from openevolve.evaluation_result import EvaluationResult
 
-# --- CONFIGURAZIONE ---
+# --- CONFIG ---
 ENV_NAME = 'ALE/Freeway-v5'
-MAX_STEPS_PER_GAME = 2000 # Freeway è basato sul tempo (2 min e rotti), ma limitiamo gli step
+MAX_STEPS_PER_GAME = 2000 
 NUM_GAMES_PER_EVAL = 3 
 EVAL_SEEDS = [42, 101, 999]
 
@@ -62,7 +62,7 @@ def save_interesting_agent(code_string, score):
             f.write(code_string)
             
     except Exception as e:
-        print(f"Errore salvataggio agente: {e}")
+        print(f"Agent save error: {e}")
 
 def clean_llm_code(code_string: str) -> str:
     pattern = r"```(?:python)?\s*(.*?)```"
@@ -73,7 +73,6 @@ def clean_llm_code(code_string: str) -> str:
 def run_custom_simulation(action_function, specific_seed=None, visualization=False):
     render_mode = "human" if visualization else None
     try:
-        # Nota: obs_type='ram' è necessario per il FreewaySpeedWrapper
         raw_env = gym.make(ENV_NAME, obs_type="ram", render_mode=render_mode)
         env = FreewayEvoWrapper(raw_env)
     except Exception as e:
@@ -95,10 +94,10 @@ def run_custom_simulation(action_function, specific_seed=None, visualization=Fal
     try:
         while not (terminated or truncated) and steps < MAX_STEPS_PER_GAME:
             try:
-                # Azioni mappate: 0 NOOP, 1 UP, 2 DOWN
+                # Mapped actions: 0 NOOP, 1 UP, 2 DOWN
                 action = int(action_function(observation))
             except Exception:
-                return -500.0 # Penalità per crash codice
+                return -500.0 # Code crash penalty
 
             observation, reward, terminated, truncated, info = env.step(action)
             total_reward += reward
@@ -144,7 +143,7 @@ def evaluate(input_data: str) -> EvaluationResult:
     avg_score = total_score / NUM_GAMES_PER_EVAL
     log_to_csv(avg_score)
 
-    # Salviamo se fa un punteggio decente (considerando il reward shaping, > 50 è buono)
+    # Save if score is decent (> 50.0)
     if avg_score > 50.0:
         save_interesting_agent(cleaned_code, avg_score)
 
@@ -158,4 +157,4 @@ if __name__ == "__main__":
         score = run_custom_simulation(initial_agent.get_action, specific_seed=TEST_SEED, visualization=True)
         print(f"Seed Agent Score (Seed {TEST_SEED}): {score}")
     except ImportError:
-        print("❌ Errore: initial_agent.py non trovato!")
+        print("❌ Error: initial_agent.py not found!")

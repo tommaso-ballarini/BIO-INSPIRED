@@ -6,7 +6,7 @@ import re
 import random
 from pathlib import Path
 
-# --- SETUP IMPORT WRAPPER ---
+# --- WRAPPER SETUP ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
 wrapper_dir = os.path.abspath(os.path.join(current_dir, '..', 'wrapper'))
 sys.path.append(wrapper_dir)
@@ -14,19 +14,19 @@ sys.path.append(wrapper_dir)
 try:
     from skiing_wrapper import SkiingOCAtariWrapper
 except ImportError as e:
-    print(f"Errore Import Wrapper: {e}")
+    print(f"Wrapper Import Error: {e}")
     sys.exit(1)
 
 from openevolve.evaluation_result import EvaluationResult
 
-# --- CONFIGURAZIONE ---
+# --- CONFIG ---
 ENV_NAME = 'ALE/Skiing-v5'
 MAX_STEPS_PER_GAME = 2000
-NUM_GAMES_PER_EVAL = 5 # Media su 3 partite diverse
-EVAL_SEEDS = [3, 1, 22] # Semi deterministici per la riproducibilità
+NUM_GAMES_PER_EVAL = 3 
+EVAL_SEEDS = [3, 1, 22] 
 
 def log_to_csv(score):
-    """Scrive il risultato su un CSV condiviso."""
+    """Writes result to a shared CSV."""
     csv_path = os.environ.get("SKIING_HISTORY_PATH", "history_backup.csv")
     for _ in range(10):
         try:
@@ -41,11 +41,10 @@ def log_to_csv(score):
 
 def save_interesting_agent(code_string, score):
     """
-    Salva il codice dell'agente se è interessante.
-    LOGICA ANTI-CLONI: Non salva se esistono già >= 2 agenti con lo stesso score intero.
+    Saves agent code if score is interesting.
+    ANTI-CLONE LOGIC: Avoids saving if >= 2 agents exist with same integer score.
     """
     try:
-        # Recupera il percorso della history per capire dove salvare
         csv_path = os.environ.get("SKIING_HISTORY_PATH", None)
         if csv_path:
             results_dir = os.path.dirname(csv_path)
@@ -55,18 +54,17 @@ def save_interesting_agent(code_string, score):
             
         os.makedirs(save_dir, exist_ok=True)
         
-        # --- LOGICA ANTI-CLONI ---
+        # --- ANTI-CLONE LOGIC ---
         score_int = int(score)
         prefix = f"agent_{score_int}_pts_"
         
-        # Conta quanti file esistono già con questo punteggio esatto
+        # Count existing files with this exact score
         existing_agents = [f for f in os.listdir(save_dir) if f.startswith(prefix)]
         
-        # Se abbiamo già 2 o più agenti con questo score, IGNORA il salvataggio
+        # Ignore if 2 or more agents exist
         if len(existing_agents) >= 2:
             return
 
-        # Nome file con score e timestamp univoco
         filename = f"{prefix}{int(time.time()*1000)}.py"
         filepath = os.path.join(save_dir, filename)
         
@@ -74,10 +72,10 @@ def save_interesting_agent(code_string, score):
             f.write(code_string)
             
     except Exception as e:
-        print(f"Errore salvataggio agente: {e}")
+        print(f"Agent save error: {e}")
 
 def clean_llm_code(code_string: str) -> str:
-    """Rimuove i backticks di markdown."""
+    """Removes markdown backticks."""
     pattern = r"```(?:python)?\s*(.*?)```"
     match = re.search(pattern, code_string, re.DOTALL)
     if match:
@@ -86,9 +84,9 @@ def clean_llm_code(code_string: str) -> str:
 
 def run_custom_simulation(action_function, specific_seed=None, visualization=False):
     """
-    Esegue una simulazione singola.
-    Se specific_seed è None, usa un random seed > 100 (Training).
-    Se specific_seed è impostato, usa quello (Test/Validation).
+    Runs a single simulation.
+    If specific_seed is None: use random seed > 100 (Training).
+    If specific_seed is Set: use specific seed (Test/Validation).
     """
     render_mode = "human" if visualization else None
     try:
@@ -96,15 +94,14 @@ def run_custom_simulation(action_function, specific_seed=None, visualization=Fal
     except Exception:
         return 0.0
 
-    # --- LOGICA RANDOM SEED (TRAINING vs TEST) ---
+    # --- RANDOM SEED LOGIC (TRAINING vs TEST) ---
     if specific_seed is None:
-        # Training: Seed casuale ma "sicuro" (lontano dai primi 100 usati per i test)
+        # Training: Random safe seed (> 100)
         current_seed = random.randint(100, 1000000)
     else:
-        # Test: Seed specifico richiesto (es. 42)
+        # Test: Specific seed
         current_seed = specific_seed
     
-    # print(f"DEBUG: Using seed {current_seed}") 
     observation, info = env.reset(seed=current_seed)
     
     total_reward = 0.0
@@ -131,7 +128,7 @@ def run_custom_simulation(action_function, specific_seed=None, visualization=Fal
     return total_reward
 
 def evaluate(input_data: str) -> EvaluationResult:
-    # 1. GESTIONE INPUT E CARICAMENTO CODICE
+    # 1. INPUT HANDLING
     code_to_exec = input_data
     if os.path.exists(input_data) and input_data.endswith('.py'):
         try:
@@ -141,10 +138,10 @@ def evaluate(input_data: str) -> EvaluationResult:
             log_to_csv(-9999.0)
             return EvaluationResult(metrics={'combined_score': -9999.0})
 
-    # 2. PULIZIA
+    # 2. CLEANING
     cleaned_code = clean_llm_code(code_to_exec)
 
-    # 3. COMPILAZIONE
+    # 3. COMPILATION
     try:
         spec = importlib.util.spec_from_loader("agent_module", loader=None)
         agent_module = importlib.util.module_from_spec(spec)
@@ -160,10 +157,10 @@ def evaluate(input_data: str) -> EvaluationResult:
         log_to_csv(-9999.0) 
         return EvaluationResult(metrics={'combined_score': -9999.0})
 
-    # 4. SIMULAZIONE (RANDOM TRAINING)
+    # 4. SIMULATION (RANDOM TRAINING)
     total_score = 0
     for i in range(NUM_GAMES_PER_EVAL):
-        # Non passiamo 'game_idx' o 'specific_seed', così ne pesca uno random > 100
+        # Using random seed (> 100)
         score = run_custom_simulation(action_function=get_action_func, visualization=False)
         total_score += score
 
@@ -172,8 +169,8 @@ def evaluate(input_data: str) -> EvaluationResult:
     # 5. LOGGING
     log_to_csv(avg_score)
 
-    # 6. SALVATAGGIO CON NUOVA SOGLIA
-    # Salva solo se supera 1000 punti (miglioramenti rispetto al seed_agent)
+    # 6. SAVE THRESHOLD
+    # Save only if score > 3000 (improvement over seed_agent)
     if avg_score > 3000.0:
         save_interesting_agent(cleaned_code, avg_score)
 
@@ -184,10 +181,10 @@ if __name__ == "__main__":
         import initial_agent
         print("Testing initial_agent (Validation Run)...")
         
-        # QUI usiamo un seed riservato (< 100) per il test visivo
+        # Use reserved seed (< 100) for visual test
         TEST_SEED = 42 
         score = run_custom_simulation(initial_agent.get_action, specific_seed=TEST_SEED, visualization=True)
         
         print(f"Seed Agent Score (Seed {TEST_SEED}): {score}")
     except ImportError:
-        print("❌ Errore: initial_agent.py non trovato!")
+        print("❌ Error: initial_agent.py not found!")

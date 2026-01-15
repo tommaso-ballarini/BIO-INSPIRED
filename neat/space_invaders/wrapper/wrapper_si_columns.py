@@ -9,21 +9,21 @@ class SpaceInvadersColumnWrapper(gym.ObservationWrapper):
         self.n_cols = n_columns
         self.skip = skip 
         
-        # Dimensioni standard Atari
+        # Standard Atari Dimensions
         self.W = 160.0
         self.H = 210.0
         self.col_width = self.W / self.n_cols
         
-        # --- DEFINIZIONE FEATURES ---
-        # 1. Colonne (30 features): EnemyY, BulletY, PlayerPos per ogni colonna
-        # 2. Globali (2 features): UFO X position, UFO Active (c'è o no?)
+        # --- FEATURE DEFINITION ---
+        # 1. Columns (30 features): EnemyY, BulletY, PlayerPos per column
+        # 2. Globals (2 features): UFO X position, UFO Active (bool)
         self.features_per_col = 3
         self.global_features = 2 
         
-        # Totale per singolo frame: 30 + 2 = 32
+        # Total per single frame: 30 + 2 = 32
         self.features_single_frame = (self.n_cols * self.features_per_col) + self.global_features
         
-        # Totale con Stack (x2): 64
+        # Total with Stack (x3): 96 Inputs
         self.n_features = self.features_single_frame * 3
         
         self.observation_space = Box(
@@ -39,20 +39,21 @@ class SpaceInvadersColumnWrapper(gym.ObservationWrapper):
             3: 3  # LEFT
         }
 
-        # Buffer per lo stacking
+        # Buffer for stacking (Memory for FFNN)
         self.frame_stack = deque(maxlen=3)
 
     def reset(self, **kwargs):
         obs, info = self.env.reset(**kwargs)
         
-        # Buffer vuoto iniziale
+        # Clear buffer
         empty_features = np.zeros(self.features_single_frame, dtype=np.float32)
         self.frame_stack.clear()
-        # Riempiamo il buffer con 3 frame vuoti/iniziali
+        
+        # Fill buffer with empty/initial frames
         self.frame_stack.append(empty_features)
         self.frame_stack.append(empty_features)
         
-        # Genera primo stato reale
+        # Generate first real state
         first_features = self._generate_features()
         self.frame_stack.append(first_features)
         
@@ -66,7 +67,7 @@ class SpaceInvadersColumnWrapper(gym.ObservationWrapper):
         truncated = False
         info = {}
         
-        # Frame Skip Manuale (Consistenza temporale)
+        # Manual Frame Skip (Temporal consistency)
         for _ in range(self.skip):
             obs, reward, term, trunc, info = self.env.step(real_action)
             total_reward += reward
@@ -75,7 +76,7 @@ class SpaceInvadersColumnWrapper(gym.ObservationWrapper):
             if terminated or truncated:
                 break
 
-        # Aggiorna lo stack
+        # Update stack
         current_features = self._generate_features()
         self.frame_stack.append(current_features)
 
@@ -85,31 +86,32 @@ class SpaceInvadersColumnWrapper(gym.ObservationWrapper):
         return self._get_stacked_obs()
 
     def _get_stacked_obs(self):
+        # Flattens the deque into a single 1D array [Frame1, Frame2, Frame3]
         return np.concatenate(self.frame_stack)
 
     def _generate_features(self):
-        # Recupera oggetti da OCAtari
+        # Retrieve objects from OCAtari
         objects = getattr(self.env, "objects", getattr(self.env.unwrapped, "objects", []))
         
         enemy_y = np.zeros(self.n_cols, dtype=np.float32)
         bullet_y = np.zeros(self.n_cols, dtype=np.float32)
         player_pos = np.zeros(self.n_cols, dtype=np.float32)
         
-        # Variabili UFO
+        # UFO Variables
         ufo_x = 0.0
         ufo_active = 0.0
         
         for obj in objects:
             cat = obj.category.lower()
             
-            # --- GESTIONE UFO (Satellite) ---
+            # --- UFO HANDLING (Satellite) ---
             if "satellite" in cat or "ufo" in cat:
                 ufo_active = 1.0
                 ufo_x = obj.x / self.W
-                continue # L'UFO non rientra nelle colonne standard
+                continue # UFO is not part of standard columns
 
-            # --- GESTIONE COLONNE ---
-            # Calcola indice colonna e normalizza Y
+            # --- COLUMN HANDLING ---
+            # Calculate column index and normalize Y
             c = int(min(obj.x / self.col_width, self.n_cols - 1))
             norm_y = obj.y / self.H 
             
@@ -124,11 +126,11 @@ class SpaceInvadersColumnWrapper(gym.ObservationWrapper):
             elif "player" in cat and "score" not in cat:
                 player_pos[c] = 1.0
 
-        # Vettore Colonne [30]
+        # Column Vector [30]
         col_features = np.column_stack((enemy_y, bullet_y, player_pos)).flatten()
         
-        # Vettore Globali [2]
+        # Global Vector [2]
         global_features = np.array([ufo_x, ufo_active], dtype=np.float32)
         
-        # Concatena: [30] + [2] = [32]
+        # Concatenate: [30] + [2] = [32]
         return np.concatenate((col_features, global_features))

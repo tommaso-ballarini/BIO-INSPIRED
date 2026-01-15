@@ -3,27 +3,41 @@ import sys
 import importlib.util
 import time
 import pathlib
+import gymnasium as gym
 import numpy as np
+import ale_py
 from tqdm import tqdm
-from ocatari.core import OCAtari
 
 # --- CONFIGURATION ---
-AGENT_PATH = r"OPEN_EVOLVE\space_invaders\results\run_si_20260107_153440_best\interesting_agents\agent_1599_pts_1767819509889.py" # PASTE HERE YOUR EXACT AGENT PATH   
-
+AGENT_PATH = r"OPEN_EVOLVE\freeway\results\best_agent.py.py" # PASTE HERE YOUR EXACT AGENT PATH 
 
 VISUALIZATION_SEED = 42
 TEST_SEEDS_RANGE = range(0, 100) # Test on 100 different games
-MAX_STEPS = 5000 
+MAX_STEPS = 2100  # Freeway has a natural limit of ~2048 frames, keeping buffer
 
 # --- PATH SETUP ---
-BASE_DIR = pathlib.Path(__file__).parent.resolve()
-sys.path.append(str(BASE_DIR))
+current_dir = pathlib.Path(__file__).parent.resolve()
+experiment_root = current_dir.parent 
+wrapper_dir = experiment_root / 'wrapper'
+
+sys.path.append(str(wrapper_dir))
+sys.path.append(str(current_dir))
+
+# Register Gym ALE
+gym.register_envs(ale_py)
 
 try:
-    from wrapper.si_wrapper import SpaceInvadersEgocentricWrapper
+    from freeway_wrapper import FreewaySpeedWrapper as FreewayOCAtariWrapper
 except ImportError:
-    print("❌ Error: Cannot import 'wrapper.si_wrapper'.")
-    sys.exit(1)
+    # Fallback se la struttura delle cartelle è diversa
+    try:
+        sys.path.append(os.path.join(current_dir, 'wrapper'))
+        from wrapper.freeway_wrapper import FreewaySpeedWrapper as FreewayOCAtariWrapper
+    except ImportError as e:
+        print("❌ Error: Cannot import 'FreewaySpeedWrapper'.")
+        print(f"Searched in: {wrapper_dir}")
+        print(f"Details: {e}")
+        sys.exit(1)
 
 def load_agent(path_str):
     path = pathlib.Path(path_str)
@@ -32,7 +46,7 @@ def load_agent(path_str):
         print("Check if AGENT_PATH is correct.")
         sys.exit(1)
     
-    spec = importlib.util.spec_from_file_location("best_agent", str(path))
+    spec = importlib.util.spec_from_file_location("test_agent", str(path))
     agent_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(agent_module)
     
@@ -43,13 +57,17 @@ def load_agent(path_str):
     return agent_module.get_action
 
 def run_simulation(action_func, seed, render=False):
-    """Runs a Space Invaders game and returns the score."""
+    """Runs a Freeway game and returns the score."""
     render_mode = "human" if render else None
     
     try:
-        # Space Invaders Env Setup
-        env = OCAtari("ALE/SpaceInvaders-v5", mode="ram", hud=False, render_mode=render_mode)
-        env = SpaceInvadersEgocentricWrapper(env, skip=4)
+        # Freeway Environment Setup
+        try:
+            env = gym.make('ALE/Freeway-v5', render_mode=render_mode, obs_type='ram')
+        except:
+            env = gym.make('Freeway-v4', render_mode=render_mode, obs_type='ram')
+            
+        env = FreewayOCAtariWrapper(env)
         
         obs, info = env.reset(seed=seed)
         
@@ -60,16 +78,20 @@ def run_simulation(action_func, seed, render=False):
         
         while not (terminated or truncated) and steps < MAX_STEPS:
             try:
-                action = int(action_func(obs))
+                # Handle agent output (list, array, or int)
+                action = action_func(obs)
+                if isinstance(action, (list, tuple, np.ndarray)):
+                    action = int(action[0])
+                action = int(action)
             except Exception:
-                break
+                action = 0 # No-op on error
             
             obs, reward, terminated, truncated, info = env.step(action)
             total_score += reward
             steps += 1
             
             if render: 
-                time.sleep(0.01) # Playback speed
+                time.sleep(0.01) # Playback speed (~100fps, smooth)
                 
         env.close()
         return total_score
@@ -79,20 +101,20 @@ def run_simulation(action_func, seed, render=False):
         return -9999
 
 def main():
-    print(f"\n👾 TESTING AGENT (Hardcoded): {os.path.basename(AGENT_PATH)} 👾")
+    print(f"\n🐔 TESTING AGENT (Hardcoded): {os.path.basename(AGENT_PATH)} 🐔")
     print("="*60)
     
     # 1. Load Agent
     get_action = load_agent(AGENT_PATH)
-    print("✅ Agent loaded successfully.")
+    print("✅ Agent loaded.")
     
-    # 2. Initial Preview (Visual)
+    # 2. Initial Preview
     print(f"🎥  PREVIEW (Seed {VISUALIZATION_SEED})...")
     run_simulation(get_action, seed=VISUALIZATION_SEED, render=True)
     print("-" * 60)
     
-    # 3. Benchmark on 100 Seeds (Fast, no graphics)
-    print(f"\n📊  BENCHMARK ON {len(TEST_SEEDS_RANGE)} SEEDS (Generalization)...")
+    # 3. Benchmark on 100 Seeds
+    print(f"\n📊  BENCHMARK ON {len(TEST_SEEDS_RANGE)} SEEDS (Variable Traffic)...")
     
     results = []
     
@@ -111,13 +133,14 @@ def main():
     print("\n" + "="*60)
     print("📈  FINAL RESULTS")
     print("="*60)
-    print(f"OVERALL AVERAGE:  {avg_score:.2f} (± {std_dev:.2f})")
+    print(f"AVERAGE CROSSING:  {avg_score:.2f} (± {std_dev:.2f})")
+    print(f"NOTE: In Freeway >21 is impossible, >18 is excellent.")
     print("-" * 30)
     print(f"🏆 BEST RUN:  Seed {best_run['seed']} -> Score {best_run['score']:.0f}")
     print(f"💩 WORST RUN: Seed {worst_run['seed']} -> Score {worst_run['score']:.0f}")
     print("="*60)
     
-    # 5. Replay Best
+    # 5. Final Replay
     choice = input(f"\nWatch the BEST run (Seed {best_run['seed']})? [y/n]: ")
     if choice.lower() == 'y':
         print(f"Replaying Seed {best_run['seed']}...")

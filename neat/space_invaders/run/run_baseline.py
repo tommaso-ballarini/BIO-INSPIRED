@@ -7,39 +7,43 @@ import neat
 import matplotlib.pyplot as plt
 import gymnasium as gym
 import ale_py 
+from pathlib import Path
 
-# --- GESTIONE PERCORSI ---
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(current_dir)
-if project_root not in sys.path:
-    sys.path.append(project_root)
+# --- PATH CONFIGURATION ---
+current_dir = Path(__file__).parent.resolve()
+project_root = current_dir.parent
+if str(project_root) not in sys.path:
+    sys.path.append(str(project_root))
 
-# --- CONFIGURAZIONI GLOBALI ---
-CONFIG_PATH = os.path.join(project_root, 'config', 'config_baseline.txt')
-RESULTS_DIR = os.path.join(project_root, 'results')
-os.makedirs(RESULTS_DIR, exist_ok=True)
+CONFIG_PATH = project_root / 'config' / 'config_baseline.txt'
+RESULTS_DIR = project_root / 'results'
+RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
-# MODIFICA: Nome hardcodato per stabilità
+# --- GLOBAL SETTINGS ---
 GAME_NAME = "SpaceInvadersNoFrameskip-v4"
 GENERATIONS = 30
 FIXED_SEED = 42
 
-print(f"✅ Configurazione Ambiente: {GAME_NAME}")
-print(f"🔒 Seed Fissato a: {FIXED_SEED} (Determinismo attivato)")
+print(f"✅ Env Config: {GAME_NAME}")
+print(f"🔒 Fixed Seed: {FIXED_SEED} (Determinism Enabled)")
+
+# Ensure ALE environments are registered
+gym.register_envs(ale_py)
 
 def eval_genome(genome, config):
-    """ Valuta un singolo genoma """
+    """ Evaluates a single genome. """
     net = neat.nn.FeedForwardNetwork.create(genome, config)
     
+    # Create env for this specific process
     try:
         env = gym.make(GAME_NAME, obs_type="ram", render_mode=None)
-    except Exception:
-        import ale_py
-        env = gym.make(GAME_NAME, obs_type="ram", render_mode=None)
+    except Exception as e:
+        return 0.0
 
-    # --- SEED FISSO PER DETERMINISMO ---
+    # --- FIXED SEED FOR DETERMINISM ---
     observation, info = env.reset(seed=FIXED_SEED)
 
+    # RAM check (Space Invaders RAM is 128 bytes)
     if len(observation) != 128:
         env.close()
         return 0.0
@@ -51,10 +55,12 @@ def eval_genome(genome, config):
     max_steps = 10000 
 
     while not (terminated or truncated) and steps < max_steps:
+        # Normalize RAM (0-255 -> 0.0-1.0)
         inputs = observation / 255.0 
         if isinstance(inputs, np.ndarray):
             inputs = inputs.flatten()
 
+        # Network activation
         outputs = net.activate(inputs)
         action = np.argmax(outputs)
         
@@ -66,8 +72,8 @@ def eval_genome(genome, config):
     return total_reward
 
 def plot_stats(statistics):
-    """ Grafico Fitness Media e Migliore """
-    print("📊 Generazione grafico Fitness...")
+    """ Plots Average and Best Fitness history. """
+    print("📊 Generating Fitness Plot...")
     if not statistics.most_fit_genomes:
         return
 
@@ -79,22 +85,23 @@ def plot_stats(statistics):
     plt.plot(generation, best_fitness, 'r-', label="Best Fitness")
     plt.plot(generation, avg_fitness, 'b-', label="Avg Fitness")
     plt.title(f"Baseline Training - Raw RAM (Seed {FIXED_SEED})")
-    plt.xlabel("Generazioni")
+    plt.xlabel("Generations")
     plt.ylabel("Fitness")
     plt.grid()
     plt.legend()
     try:
-        plt.savefig(os.path.join(RESULTS_DIR, "fitness_baseline.png"))
+        output_path = RESULTS_DIR / "fitness_baseline.png"
+        plt.savefig(output_path)
+        print(f"✅ Fitness plot saved: {output_path.name}")
     except Exception as e:
-        print(f"❌ Errore salvataggio fitness: {e}")
+        print(f"❌ Fitness plot error: {e}")
     plt.close()
 
 def plot_species(statistics):
-    """ Speciation Graph (Stacked Plot) - Correct Version """
+    """ Generates Speciation Stackplot. """
     print("📊 Generating Speciation Plot...")
     
-    # Official NEAT method to get the correct counts
-    # This fixes the "dict object has no attribute members" error
+    # Get species sizes per generation
     species_sizes = statistics.get_species_sizes()
     
     if not species_sizes:
@@ -103,72 +110,73 @@ def plot_species(statistics):
 
     num_generations = len(species_sizes)
     
-    # Transpose the matrix to fit stackplot (Rows=Species, Cols=Generations)
+    # Transpose for stackplot (Rows=Species, Cols=Generations)
     curves = np.array(species_sizes).T
 
     plt.figure(figsize=(12, 8))
     ax = plt.subplot(111)
     
     try:
-        # Use stackplot for the filled area effect
         ax.stackplot(range(num_generations), *curves)
         
         plt.title("Evolution of Species (Speciation)")
         plt.ylabel("Number of Genomes per Species")
         plt.xlabel("Generations")
-        plt.margins(0, 0) # Removes white side margins
+        plt.margins(0, 0)
         
-        # Ensure RESULTS_DIR is defined in your global scope
-        output_path = os.path.join(RESULTS_DIR, "speciation.png")
+        output_path = RESULTS_DIR / "speciation.png"
         plt.savefig(output_path)
-        print(f"✅ Speciation plot saved to: {output_path}")
+        print(f"✅ Speciation plot saved: {output_path.name}")
         
     except Exception as e:
-        print(f"❌ Error during plotting: {e}")
-        # Debug info
-        print(f"   Curves shape: {curves.shape if hasattr(curves, 'shape') else 'Unknown'}")
+        print(f"❌ Plotting error: {e}")
     
     plt.close()
+
 def run_baseline():
-    print(f"📂 Caricamento config Baseline: {CONFIG_PATH}")
-    if not os.path.exists(CONFIG_PATH):
-        print(f"❌ Config non trovato: {CONFIG_PATH}")
+    print(f"📂 Loading Config: {CONFIG_PATH}")
+    if not CONFIG_PATH.exists():
+        print(f"❌ Config not found: {CONFIG_PATH}")
         return
 
     config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
                          neat.DefaultSpeciesSet, neat.DefaultStagnation,
-                         CONFIG_PATH)
+                         str(CONFIG_PATH))
 
     p = neat.Population(config)
     
-    # Reporter
+    # Reporters
     p.add_reporter(neat.StdOutReporter(True))
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
-    p.add_reporter(neat.Checkpointer(10, filename_prefix=os.path.join(RESULTS_DIR, "neat-checkpoint-")))
+    
+    # Checkpoints
+    checkpoint_prefix = RESULTS_DIR / "neat-checkpoint-"
+    p.add_reporter(neat.Checkpointer(10, filename_prefix=str(checkpoint_prefix)))
 
+    # Multiprocessing Setup
     num_workers = max(1, multiprocessing.cpu_count() - 2)
-    print(f"🚀 Avvio Baseline su {num_workers} processi...")
+    print(f"🚀 Starting Baseline on {num_workers} workers...")
     
     pe = neat.ParallelEvaluator(num_workers, eval_genome)
     
     try:
         winner = p.run(pe.evaluate, GENERATIONS)
         
-        print(f"\n🏆 Fine Training.")
+        print(f"\n🏆 Training Complete.")
         print(f"💎 Best Ever Fitness: {winner.fitness}")
         
-        with open(os.path.join(RESULTS_DIR, 'baseline_winner.pkl'), 'wb') as f:
+        with open(RESULTS_DIR / 'baseline_winner.pkl', 'wb') as f:
             pickle.dump(winner, f)
         
-        # Generazione Grafici
+        # Generate Plots
         plot_stats(stats)
         plot_species(stats)
         
-        print("✅ Baseline completata con successo.")
+        print("✅ Baseline finished successfully.")
 
     except Exception as e:
-        print(f"\n❌ ERRORE CRITICO: {e}")
+        print(f"\n❌ CRITICAL ERROR: {e}")
         import traceback
         traceback.print_exc()
 

@@ -1,12 +1,12 @@
-# --- Impostazioni Generali ---
+# --- General Settings ---
 max_iterations: 6000
 random_seed: 42
 log_level: "INFO"
 
-# --- Impostazioni di Evoluzione ---
-diff_based_evolution: false  # Riscrivi la funzione intera, meglio per logiche complesse
+# --- Evolution Settings ---
+diff_based_evolution: false  
 
-# --- Configurazione LLM (Ollama) ---
+# --- LLM Configuration (Ollama) ---
 llm:
   models:
     - name: "qwen2.5-coder:7b" 
@@ -70,7 +70,7 @@ prompt:
     
 
 
-# --- Configurazione Database ---
+# --- Database Configuration ---
 database:
   population_size: 2000
   num_islands: 1
@@ -79,8 +79,8 @@ database:
     - "score"
   feature_bins: 40
 
-# --- Configurazione Valutatore ---
+# --- Evaluator Configuration ---
 evaluator:
   timeout: 300
   cascade_evaluation: false
-  parallel_evaluations: 24
+  parallel_evaluations: 24 # depend on your local machine

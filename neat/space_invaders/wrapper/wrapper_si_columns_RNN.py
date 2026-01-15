@@ -13,15 +13,15 @@ class SpaceInvadersColumnWrapper(gym.ObservationWrapper):
         self.H = 210.0
         self.col_width = self.W / self.n_cols
         
-        # 1. Colonne (30 features) + 2. Globali (2 features)
+        # 1. Columns (3 features per col) + 2. Global (2 features)
         self.features_per_col = 3
         self.global_features = 2 
         
-        # Totale per singolo frame: 32
+        # Total per single frame: 32
         self.features_single_frame = (self.n_cols * self.features_per_col) + self.global_features
         
-        # --- CORREZIONE: NIENTE MOLTIPLICAZIONE ---
-        self.n_features = self.features_single_frame # Rimane 32
+        # --- CORRECTION: NO MULTIPLICATION (Single Frame) ---
+        self.n_features = self.features_single_frame # Remains 32
         
         self.observation_space = Box(
             low=0.0, high=1.0, 
@@ -36,16 +36,16 @@ class SpaceInvadersColumnWrapper(gym.ObservationWrapper):
             3: 3  # LEFT
         }
 
-        # --- CORREZIONE: MAXLEN = 1 (Niente storico) ---
+        # --- CORRECTION: MAXLEN = 1 (No History) ---
         self.frame_stack = deque(maxlen=1)
 
     def reset(self, **kwargs):
         obs, info = self.env.reset(**kwargs)
         
-        # Pulisci e inizializza
+        # Clean and init
         self.frame_stack.clear()
         
-        # Genera il primo frame
+        # Generate first frame
         first_features = self._generate_features()
         self.frame_stack.append(first_features)
         
@@ -68,7 +68,7 @@ class SpaceInvadersColumnWrapper(gym.ObservationWrapper):
             if terminated or truncated:
                 break
 
-        # Aggiorna l'unico frame nel buffer
+        # Update the single frame in buffer
         current_features = self._generate_features()
         self.frame_stack.append(current_features)
 
@@ -78,11 +78,11 @@ class SpaceInvadersColumnWrapper(gym.ObservationWrapper):
         return self._get_stacked_obs()
 
     def _get_stacked_obs(self):
-        # Ritorna l'unico elemento presente (array di 32 float)
+        # Return the single element present (array of 32 floats)
         return np.array(self.frame_stack[0], dtype=np.float32)
 
     def _generate_features(self):
-        # Questa parte va bene, genera 32 features
+        # This part is correct, generates 32 features
         objects = getattr(self.env, "objects", getattr(self.env.unwrapped, "objects", []))
         
         enemy_y = np.zeros(self.n_cols, dtype=np.float32)

@@ -9,7 +9,7 @@ import threading
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# --- FIX WINDOWS ---
+# --- Windows terminal encoding fix ---
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding='utf-8')
     sys.stderr.reconfigure(encoding='utf-8')
@@ -23,32 +23,25 @@ except ImportError:
 from openevolve import run_evolution
 from openevolve.config import Config, LLMModelConfig
 
-# --- CONFIGURAZIONE PERCORSI (FIXED) ---
-# 1. Identifichiamo la cartella dove si trova questo script (la cartella 'run')
+# --- Path configuration ---
 run_dir = pathlib.Path(__file__).parent.resolve()
-
-# 2. Identifichiamo la cartella principale del progetto (la cartella 'freeway') salendo di un livello
 project_dir = run_dir.parent 
-
 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 run_name = f"run_freeway_{timestamp}"
-
-# I risultati vanno bene dentro 'run/results'
 output_dir = run_dir / 'results' / run_name
-
 history_csv = output_dir / 'history.csv'
 gen_stats_csv = output_dir / 'generation_stats.csv'
 os.environ["FREEWAY_HISTORY_PATH"] = str(history_csv)
 
-# 3. Puntiamo alle cartelle 'src' e 'configs' partendo da 'project_dir'
 initial_program_path = project_dir / 'src' / 'initial_agent.py'
 evaluator_path = project_dir / 'src' / 'evaluator.py'
-# Nota: nell'immagine il file è maiuscolo config.YAML, gestiamo il caso
+
 config_path = project_dir / 'configs' / 'config.YAML' 
 if not config_path.exists():
     config_path = project_dir / 'configs' / 'config.yaml'
 
 class LogStatsWatcher(threading.Thread):
+    """Background thread to extract stats from logs to CSV"""
     def __init__(self, log_dir, csv_file):
         super().__init__()
         self.log_dir = log_dir
@@ -72,7 +65,7 @@ class LogStatsWatcher(threading.Thread):
             with open(self.csv_file, 'w', encoding='utf-8') as f:
                 f.write("generation,best_score,avg_score,diversity\n")
 
-        print(f"📊 Stats Watcher attivo su: {os.path.basename(log_file)}")
+        print(f"📊 Stats Watcher active on: {os.path.basename(log_file)}")
         pattern = re.compile(r"best=([\d\.-]+),\s*avg=([\d\.-]+),\s*diversity=([\d\.-]+),\s*gen=(\d+)")
 
         try:
@@ -90,12 +83,13 @@ class LogStatsWatcher(threading.Thread):
                             with open(self.csv_file, 'a', encoding='utf-8') as csv_f:
                                 csv_f.write(f"{match.group(4)},{match.group(1)},{match.group(2)},{match.group(3)}\n")
         except Exception as e:
-            print(f"Errore watcher: {e}")
+            print(f"Watcher error: {e}")
 
     def stop(self):
         self.stop_event.set()
 
 class ProgressBarHandler(logging.Handler):
+    """Integrates OpenEvolve logging with tqdm progress bar"""
     def __init__(self, total_iterations):
         super().__init__()
         if tqdm:
@@ -118,7 +112,8 @@ class ProgressBarHandler(logging.Handler):
         super().close()
 
 def plot_results():
-    print("\n--- Generazione Grafici ---")
+    """Generates fitness evolution plots"""
+    print("\n--- Generating Plots ---")
     if history_csv.exists():
         try:
             df = pd.read_csv(history_csv)
@@ -133,40 +128,40 @@ def plot_results():
                 df['best_so_far'] = df['score'].cummax()
                 plt.plot(df['attempt'], df['best_so_far'], c='green', linewidth=2, label='Best So Far')
                 
-                plt.title(f"Evoluzione Freeway - {timestamp}")
-                plt.xlabel("Tentativi")
+                plt.title(f"Freeway Evolution - {timestamp}")
+                plt.xlabel("Attempts")
                 plt.ylabel("Score (Shaped)")
                 plt.grid(True, alpha=0.3)
                 plt.savefig(output_dir / 'fitness_history.png')
                 plt.close()
-                print("✅ History plot salvato.")
+                print("✅ History plot saved.")
         except Exception as e:
-            print(f"❌ Errore plot history: {e}")
+            print(f"❌ Plotting error: {e}")
 
 def setup_env():
     output_dir.mkdir(parents=True, exist_ok=True)
 
 def run_experiment():
-    print(f"--- Avvio OpenEvolve FREEWAY ---")
+    print(f"--- Starting OpenEvolve FREEWAY ---")
     print(f"Run Dir: {run_dir}")
     print(f"Project Dir: {project_dir}")
     print(f"Config Path: {config_path}")
-    
-    # 1. CARICAMENTO CONFIGURAZIONE
+
+
+    # 1. Load Configuration
     config = None
     try:
         if config_path.exists():
             config = Config.from_yaml(str(config_path))
-            print("✅ Configurazione caricata da YAML.")
+            print("✅ Config loaded from YAML.")
         else:
-            print(f"⚠️ YAML non trovato in {config_path}, uso configurazione base.")
+            print(f"⚠️ YAML not found in {config_path}, using base config.")
             config = Config()
     except Exception as e:
-        print(f"⚠️ Errore lettura YAML: {e}. Uso config default.")
+        print(f"⚠️ YAML error: {e}. Using default config.")
         config = Config()
 
-    # 2. OVERRIDE MANUALE OLLAMA
-    # Se il config è vuoto o non ha modelli, li iniettiamo manualmente
+    # 2. Manual LLM Override (Ollama)
     if not hasattr(config, 'llm') or not config.llm.models:
         print("🔧 Configurazione LLM manuale (Ollama)...")
         # Ricostruiamo la sezione LLM se manca del tutto
@@ -186,10 +181,8 @@ def run_experiment():
         config.llm.api_key = "ollama"
         config.llm.temperature = 0.8
         
-        # Forziamo anche il prompt se necessario, ma di solito è nel yaml
-        # Se il yaml è fallito, il prompt sarà vuoto, quindi attenzione.
 
-    # 3. Setup Watcher e Barre
+    # 3. Setup Monitoring
     log_dir = output_dir / "logs"
     watcher = LogStatsWatcher(str(log_dir), str(gen_stats_csv))
     watcher.start()
@@ -199,7 +192,7 @@ def run_experiment():
     bar_handler.setLevel(logging.INFO)
     logging.getLogger().addHandler(bar_handler)
     
-    # 4. START EVOLUTION
+    # 4. Start Evolution Process
     try:
         run_evolution(
             initial_program=str(initial_program_path),
@@ -208,7 +201,7 @@ def run_experiment():
             output_dir=str(output_dir)
         )
     except Exception as e:
-        print(f"❌ Errore CRITICO durante la run: {e}")
+        print(f"❌ Critical error: {e}")
         import traceback
         traceback.print_exc()
     finally:

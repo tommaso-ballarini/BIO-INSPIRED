@@ -5,16 +5,16 @@ import logging
 import re
 import datetime
 import time
+import threading
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# --- FIX WINDOWS ---
+# --- WINDOWS FIX ---
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding='utf-8')
     sys.stderr.reconfigure(encoding='utf-8')
 os.environ["PYTHONIOENCODING"] = "utf-8"
 
-# Import opzionale tqdm
 try:
     from tqdm import tqdm
 except ImportError:
@@ -22,23 +22,75 @@ except ImportError:
 
 from openevolve import run_evolution
 
-# --- CONFIGURAZIONE CARTELLE ---
+# --- PATH CONFIGURATION ---
 base_path = pathlib.Path(__file__).parent.resolve()
-
 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 run_name = f"run_si_{timestamp}"
 output_dir = base_path / 'results' / run_name
 
-# File history specifico per Space Invaders
+# Specific history files
 history_csv = output_dir / 'history.csv'
+gen_stats_csv = output_dir / 'generation_stats.csv' 
 os.environ["SI_HISTORY_PATH"] = str(history_csv)
 
-initial_program_path = base_path / 'src' / 'initial_agent.py'
+# initial_program_path = base_path / 'src' / 'initial_agent.py'
+initial_program_path = base_path / 'src' / 'seed_agent.py'      # <-- NEW (Your champion)
 evaluator_path = base_path / 'src' / 'evaluator.py'
 config_path = base_path / 'configs' / 'config.yaml'
 
+# --- LOG PARSER THREAD ---
+class LogStatsWatcher(threading.Thread):
+    """
+    Reads log file in real-time and extracts generation stats 
+    (Avg, Best, Diversity) saving them to CSV.
+    """
+    def __init__(self, log_dir, csv_file):
+        super().__init__()
+        self.log_dir = log_dir
+        self.csv_file = csv_file
+        self.stop_event = threading.Event()
+        self.daemon = True
+
+    def run(self):
+        # Wait for log file creation
+        log_file = None
+        while not self.stop_event.is_set():
+            if os.path.exists(self.log_dir):
+                logs = sorted([f for f in os.listdir(self.log_dir) if f.endswith('.log')])
+                if logs:
+                    log_file = os.path.join(self.log_dir, logs[-1])
+                    break
+            time.sleep(2)
+        
+        if not log_file: return
+
+        # Init CSV
+        with open(self.csv_file, 'w', encoding='utf-8') as f:
+            f.write("generation,best_score,avg_score,diversity\n")
+
+        print(f"📊 Stats Watcher active on: {os.path.basename(log_file)}")
+
+        # Regex to parse line: 
+        # INFO -  * Island 0: ... best=1599.75, avg=837.44, diversity=147.18, gen=4074
+        pattern = re.compile(r"best=([\d\.-]+),\s*avg=([\d\.-]+),\s*diversity=([\d\.-]+),\s*gen=(\d+)")
+
+        with open(log_file, 'r', encoding='utf-8') as f:
+            while not self.stop_event.is_set():
+                line = f.readline()
+                if not line:
+                    time.sleep(1)
+                    continue
+                
+                if "Island 0:" in line and "avg=" in line:
+                    match = pattern.search(line)
+                    if match:
+                        with open(self.csv_file, 'a', encoding='utf-8') as csv_f:
+                            csv_f.write(f"{match.group(4)},{match.group(1)},{match.group(2)},{match.group(3)}\n")
+
+    def stop(self):
+        self.stop_event.set()
+
 class ProgressBarHandler(logging.Handler):
-    """Barra di progresso per OpenEvolve."""
     def __init__(self, total_iterations):
         super().__init__()
         if tqdm:
@@ -61,13 +113,11 @@ class ProgressBarHandler(logging.Handler):
         super().close()
 
 def format_duration(seconds):
-    """Converte secondi in formato H:M:S."""
     m, s = divmod(seconds, 60)
     h, m = divmod(m, 60)
     return f"{int(h)}h {int(m)}m {int(s)}s"
 
 def get_config_details():
-    """Legge il config.yaml per estrarre info utili per il plot."""
     details = { "max_iter": 100, "pop_size": "N/A", "model": "Unknown" }
     try:
         with open(config_path, 'r', encoding='utf-8') as f:
@@ -83,79 +133,70 @@ def get_config_details():
     return details
 
 def plot_results(duration_str=""):
-    """Genera grafico Fitness e Statistiche finali con Metadata."""
-    print("\n--- Generazione Grafico Fitness ---")
-    if not history_csv.exists():
-        print(f"Nessun dato storico trovato in: {history_csv}")
-        return
-
+    print("\n--- Generating Plots ---")
     config_data = get_config_details()
     
-    try:
-        df = pd.read_csv(history_csv)
-        if df.empty: return
+    # 1. Individual Fitness Plot (History)
+    if history_csv.exists():
+        try:
+            df = pd.read_csv(history_csv)
+            if not df.empty:
+                df['attempt'] = range(1, len(df) + 1)
+                plt.figure(figsize=(12, 8))
+                
+                valid_runs = df[df['score'] > -9000]
+                if not valid_runs.empty:
+                    plt.scatter(valid_runs['attempt'], valid_runs['score'], c='blue', label='Individual Eval', alpha=0.3, s=10)
 
-        df['attempt'] = range(1, len(df) + 1)
-        
-        # Setup Figura
-        plt.figure(figsize=(12, 8))
-        
-        # Filtri Crash vs Validi
-        error_runs = df[df['score'] <= -9]
-        valid_runs = df[df['score'] > -9000]
+                df['best_so_far'] = df['score'].cummax()
+                plt.plot(df['attempt'], df['best_so_far'], c='green', linewidth=2, label='Best So Far')
+                
+                plt.title(f"Space Invaders Evolution - {timestamp}")
+                plt.xlabel("Evaluations")
+                plt.ylabel("Fitness")
+                plt.legend()
+                plt.grid(True, alpha=0.3)
+                plt.savefig(output_dir / 'fitness_plot.png')
+                plt.close()
+        except Exception as e:
+            print(f"History plot error: {e}")
 
-        if not error_runs.empty:
-            plt.scatter(error_runs['attempt'], error_runs['score'], c='red', label='Crash / Errori', alpha=0.3, s=15, marker='x')
-
-        if not valid_runs.empty:
-            plt.scatter(valid_runs['attempt'], valid_runs['score'], c='blue', label='Validi', alpha=0.6, s=20)
-
-        # Best So Far
-        df['best_so_far'] = df['score'].cummax()
-        plt.plot(df['attempt'], df['best_so_far'], c='green', linewidth=2, label='Best So Far')
-
-        plt.subplots_adjust(top=0.85)
-        
-        plt.suptitle(f"Evoluzione Space Invaders - {timestamp}", fontsize=16, fontweight='bold', y=0.95)
-        
-        subtitle = (f"Model: {config_data['model']} | Pop: {config_data['pop_size']} | "
-                    f"Max Gen: {config_data['max_iter']} | Duration: {duration_str}")
-        
-        plt.title(subtitle, fontsize=10, pad=10, backgroundcolor='#eeeeee')
-
-        plt.xlabel("Numero Valutazioni (Tentativi)")
-        plt.ylabel("Fitness (Survival + Kills)")
-        plt.legend(loc='lower right')
-        plt.grid(True, alpha=0.3)
-
-        safe_model_name = re.sub(r'[^\w\-]', '_', config_data['model'])
-        plot_filename = f'fitness_plot_{safe_model_name}_pop{config_data["pop_size"]}.png'
-        
-        output_plot = output_dir / plot_filename
-        plt.savefig(output_plot, dpi=150)
-        plt.close()
-        print(f"✅ Grafico salvato in: {output_plot}")
-
-    except Exception as e:
-        print(f"❌ Errore plot: {e}")
-        import traceback
-        traceback.print_exc()
+    # 2. Generational Plot (Avg vs Best)
+    if gen_stats_csv.exists():
+        try:
+            df = pd.read_csv(gen_stats_csv)
+            if not df.empty:
+                plt.figure(figsize=(10, 6))
+                plt.plot(df['generation'], df['best_score'], 'g-', label='Best Score')
+                plt.plot(df['generation'], df['avg_score'], 'b-', label='Avg Score')
+                plt.fill_between(df['generation'], df['avg_score'], df['best_score'], color='green', alpha=0.1)
+                
+                plt.title(f"Generation Stats (Avg vs Best)")
+                plt.xlabel("Generation")
+                plt.ylabel("Score")
+                plt.legend()
+                plt.grid(True)
+                plt.savefig(output_dir / 'generation_plot.png')
+                plt.close()
+                print("✅ Generation stats plot saved.")
+        except Exception as e:
+            print(f"Gen stats plot error: {e}")
 
 def setup_env():
     output_dir.mkdir(parents=True, exist_ok=True)
 
 def run_experiment():
-    print(f"--- Avvio OpenEvolve SPACE INVADERS ---")
-    print(f"Output Directory: {output_dir}")
+    print(f"--- Starting OpenEvolve SPACE INVADERS (v5) ---")
     
     start_time = time.time()
-    
     config_info = get_config_details()
-    max_iter = config_info["max_iter"]
     
-    print(f"Model: {config_info['model']} | Pop: {config_info['pop_size']}")
+    # Start Watcher
+    log_dir = output_dir / "logs"
+    watcher = LogStatsWatcher(str(log_dir), str(gen_stats_csv))
+    watcher.start()
     
-    bar_handler = ProgressBarHandler(max_iter)
+    bar_handler = ProgressBarHandler(config_info["max_iter"])
     bar_handler.setLevel(logging.INFO)
     logging.getLogger().addHandler(bar_handler)
     
@@ -167,18 +208,14 @@ def run_experiment():
             output_dir=str(output_dir)
         )
     except Exception as e:
-        print(f"Errore Run: {e}")
+        print(f"Run Error: {e}")
     finally:
+        watcher.stop()
         end_time = time.time()
-        duration_sec = end_time - start_time
-        duration_str = format_duration(duration_sec)
-        
+        duration_str = format_duration(end_time - start_time)
         bar_handler.close()
         plot_results(duration_str)
-        
-        print(f"\n" + "="*40)
-        print(f"⏱️  TEMPO TOTALE RUN: {duration_str}")
-        print(f"="*40 + "\n")
+        print(f"\n⏱️  TOTAL TIME: {duration_str}\n")
 
 if __name__ == '__main__':
     setup_env()

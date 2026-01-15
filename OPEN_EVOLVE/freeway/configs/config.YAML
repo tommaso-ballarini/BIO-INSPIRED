@@ -1,12 +1,12 @@
-# --- Impostazioni Generali ---
+# --- General Settings ---
 max_iterations: 6000
 random_seed: 42
 log_level: "INFO"
 
-# --- Impostazioni di Evoluzione ---
+# --- Evolution Settings ---
 diff_based_evolution: false
 
-# --- Configurazione LLM ---
+# --- LLM Configuration (Ollama) ---
 llm:
   models:
     - name: "qwen2.5-coder:7b" 
@@ -59,7 +59,7 @@ prompt:
     - Return ONLY the executable Python function `get_action(observation)`.
     - Do not use external libraries (except numpy/random).
 
-# --- Configurazione Database ---
+# --- Database Configuration ---
 database:
   population_size: 2000
   num_islands: 1
@@ -68,8 +68,8 @@ database:
     - "score"
   feature_bins: 30
 
-# --- Configurazione Valutatore ---
+# --- Evaluator Configuration ---
 evaluator:
   timeout: 300
   cascade_evaluation: false
-  parallel_evaluations: 20
+  parallel_evaluations: 20 # depend on your local machine

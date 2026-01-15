@@ -4,8 +4,8 @@ from gymnasium.spaces import Box
 
 class SpaceInvadersEgocentricWrapper(gym.ObservationWrapper):
     """
-    Wrapper Egocentrico per Space Invaders (19 Input).
-    Replica esatta della logica usata nell'esperimento NEAT.
+    Egocentric Wrapper for Space Invaders (19 Inputs).
+    Exact replica of the logic used in the NEAT experiment.
     """
     def __init__(self, env, skip=4):
         super().__init__(env)
@@ -13,13 +13,13 @@ class SpaceInvadersEgocentricWrapper(gym.ObservationWrapper):
         self.W = 160.0
         self.H = 210.0
         
-        # --- DEFINIZIONE FEATURE (Totale: 19) ---
-        # [0] Player X Norm (Ricalibrato 0.0-1.0 su area giocabile)
-        # [1-5] Sensori Prossimità (S1..S5)
-        # [6-10] Delta Sensori (dS1..dS5)
+        # --- FEATURE DEFINITION (Total: 19) ---
+        # [0] Player X Norm (Recalibrated 0.0-1.0 on playable area)
+        # [1-5] Proximity Sensors (S1..S5)
+        # [6-10] Sensor Deltas (dS1..dS5)
         # [11] Nearest Alien Relative X (Targeting)
-        # [12-15] Densità Alieni (4 Quadranti Relativi)
-        # [16] Frazione Totale Alieni (Game Progression)
+        # [12-15] Alien Density (4 Relative Quadrants)
+        # [16] Total Alien Fraction (Game Progression)
         # [17] UFO Relative X
         # [18] UFO Active
         
@@ -31,7 +31,7 @@ class SpaceInvadersEgocentricWrapper(gym.ObservationWrapper):
             dtype=np.float32
         )
         
-        # Mappa azioni: 0=Noop, 1=Fire, 2=Right, 3=Left
+        # Action Map: 0=Noop, 1=Fire, 2=Right, 3=Left
         self.action_map = {0: 0, 1: 1, 2: 2, 3: 3}
         self.prev_sensors = np.zeros(5, dtype=np.float32)
 
@@ -60,7 +60,6 @@ class SpaceInvadersEgocentricWrapper(gym.ObservationWrapper):
         return self._generate_features()
 
     def _generate_features(self):
-        # Supporto per Ocatari (sia v1 che v2)
         objects = getattr(self.env, "objects", getattr(self.env.unwrapped, "objects", []))
         
         player_x = self.W / 2.0
@@ -79,12 +78,12 @@ class SpaceInvadersEgocentricWrapper(gym.ObservationWrapper):
             elif "bullet" in cat or "missile" in cat or "bomb" in cat:
                 projectiles.append(obj)
         
-        # --- 1. PLAYER X (Ricalibrata) ---
-        # Range giocabile stimato: 30px - 130px (Ampiezza 100px)
+        # --- 1. PLAYER X (Recalibrated) ---
+        # Estimated playable range: 30px - 130px (Width 100px)
         norm_x = (player_x - 30.0) / 100.0
         norm_x = np.clip(norm_x, 0.0, 1.0)
 
-        # --- 2. SENSORI (Invariati) ---
+        # --- 2. SENSORS ---
         sensor_ranges = [(-50, -30), (-30, -10), (-10, 10), (10, 30), (30, 50)]
         current_sensors = np.zeros(5, dtype=np.float32)
         
@@ -101,14 +100,14 @@ class SpaceInvadersEgocentricWrapper(gym.ObservationWrapper):
         delta_sensors = current_sensors - self.prev_sensors
         self.prev_sensors = current_sensors.copy()
         
-        # --- 3. TARGETING (Invariato) ---
+        # --- 3. TARGETING ---
         target_alien_rel_x = 0.0
         if aliens:
             lowest_alien = max(aliens, key=lambda a: a.y)
             target_alien_rel_x = (lowest_alien.x - player_x) / (self.W / 2.0)
             target_alien_rel_x = np.clip(target_alien_rel_x, -1.0, 1.0)
         
-        # --- 4. DENSITÀ (Invariato) ---
+        # --- 4. DENSITY ---
         q_counts = [0, 0, 0, 0]
         total_aliens = len(aliens)
         if total_aliens > 0:
@@ -123,10 +122,10 @@ class SpaceInvadersEgocentricWrapper(gym.ObservationWrapper):
         else:
             q_densities = np.zeros(4, dtype=np.float32)
 
-        # --- 5. FRAZIONE ALIENI (Invariato) ---
+        # --- 5. ALIEN FRACTION ---
         alien_fraction = total_aliens / 36.0
 
-        # --- 6. UFO (Invariato) ---
+        # --- 6. UFO ---
         ufo_rel_x = 0.0
         ufo_active = 0.0
         if ufo:
@@ -134,7 +133,7 @@ class SpaceInvadersEgocentricWrapper(gym.ObservationWrapper):
             ufo_rel_x = (ufo.x - player_x) / (self.W / 2.0)
             ufo_rel_x = np.clip(ufo_rel_x, -1.0, 1.0)
 
-        # --- ASSEMBLAGGIO (19 Features) ---
+        # --- ASSEMBLY (19 Features) ---
         features = np.concatenate([
             [norm_x],           # [0]
             current_sensors,    # [1-5]

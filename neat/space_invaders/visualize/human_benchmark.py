@@ -25,7 +25,7 @@ if "wrapper" not in os.listdir(current_dir):
 try:
     from wrapper.wrapper_si_ego import SpaceInvadersEgocentricWrapper
     WRAPPER_NAME = "EgoWrapper (Survival+Aim)"
-except ImportError:
+except ImportError :
     print("❌ Critical: 'wrapper_si_ego.py' not found.")
     sys.exit(1)
 

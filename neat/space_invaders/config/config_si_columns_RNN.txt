@@ -1,28 +1,28 @@
 [NEAT]
-fitness_criterion     = max
-fitness_threshold     = 5000
-pop_size              = 150
-reset_on_extinction   = False
+fitness_criterion      = max
+fitness_threshold      = 5000
+pop_size               = 150
+reset_on_extinction    = False
 no_fitness_termination = False
 
 [DefaultGenome]
-# === INPUT: (10 col * 3 feat + 2 UFO) * 2 stack = 64 ===
+# === INPUT ===
 num_inputs            = 32
-# === OUTPUT: 6 Azioni (Atari Standard) ===
+# === OUTPUT: 4 Actions ===
 num_outputs           = 4
-# Partiamo da 0 hidden. NEAT creerà i nodi di memoria da solo.
+# Start with 4 hidden nodes
 num_hidden            = 4
-# === IMPORTANTE: False abilita la memoria (RNN) ===
+# === IMPORTANT: False enables RNN (Memory) ===
 feed_forward          = False
 
-# --- STRUTTURA INIZIALE ---
-initial_connection      = partial_direct 0.5
+# --- INITIAL STRUCTURE ---
+initial_connection    = partial_direct 0.5
 conn_add_prob         = 0.5
 conn_delete_prob      = 0.1
 node_add_prob         = 0.3
 node_delete_prob      = 0.05
 
-# --- PESI E BIAS ---
+# --- WEIGHTS & BIAS ---
 weight_init_mean      = 0.0
 weight_init_stdev     = 1.0
 weight_max_value      = 5.0
@@ -39,13 +39,13 @@ bias_mutate_power     = 0.5
 bias_mutate_rate      = 0.7
 bias_replace_rate     = 0.1
 
-# --- ATTIVAZIONI ---
-# Tanh è ottima per le RNN perché gestisce bene i valori negativi/positivi nel tempo
+# --- ACTIVATIONS ---
+# Tanh handles negative/positive values well over time (RNN)
 activation_default      = tanh
 activation_mutate_rate  = 0.1
 activation_options      = tanh sigmoid 
 
-# --- COMPATIBILITA ---
+# --- COMPATIBILITY ---
 compatibility_disjoint_coefficient = 1.0
 compatibility_weight_coefficient   = 0.5
 
@@ -58,7 +58,7 @@ response_mutate_power = 0.0
 response_mutate_rate  = 0.0
 response_replace_rate = 0.0
 
-# --- ALTRO ---
+# --- OTHER ---
 enabled_default         = True
 enabled_mutate_rate     = 0.01
 

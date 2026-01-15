@@ -9,52 +9,59 @@ import gymnasium as gym
 from ocatari.core import OCAtari
 import random
 import time
+from pathlib import Path
 
-# --- PERCORSI ---
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(current_dir)
-if project_root not in sys.path:
-    sys.path.append(project_root)
+# --- PATH CONFIGURATION ---
+current_dir = Path(__file__).parent.resolve()
+project_root = current_dir.parent
+if str(project_root) not in sys.path:
+    sys.path.append(str(project_root))
 
-# Import Wrapper
+# --- IMPORT WRAPPER ---
 try:
     from wrapper.wrapper_si_ego import SpaceInvadersEgocentricWrapper
 except ImportError:
-    print("❌ ERRORE: Non trovo 'wrapper_si_ego.py'!")
+    print("❌ ERROR: 'wrapper_si_ego.py' not found!")
     sys.exit(1)
 
-
-# --- CONFIGURAZIONI ---
-CONFIG_PATH = os.path.join(project_root, 'config', 'config_si_ego.txt')
-RESULTS_DIR = os.path.join(project_root, 'results')
-os.makedirs(RESULTS_DIR, exist_ok=True)
+# --- GLOBAL SETTINGS ---
+CONFIG_PATH = project_root / 'config' / 'config_si_ego.txt'
+RESULTS_DIR = project_root / 'results'
+RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 GAME_NAME = "SpaceInvadersNoFrameskip-v4"
 GENERATIONS = 30
-# IMPORTANTE: Niente seed fisso per il training RNN
-print(f"✅ Configurazione: {GAME_NAME} (RNN Mode - No Fixed Seed)")
+# IMPORTANT: No fixed seed for RNN training to ensure generalization
+print(f"✅ Config: {GAME_NAME} (RNN Mode - No Fixed Seed)")
 
-# --- PLOTTING (Invariato) ---
+# --- PLOTTING FUNCTIONS ---
+
 def plot_stats(statistics):
+    """ Plots Average and Best Fitness. """
     if not statistics.most_fit_genomes: return
+
     generation = range(len(statistics.most_fit_genomes))
     best_fitness = [c.fitness for c in statistics.most_fit_genomes]
     avg_fitness = np.array(statistics.get_fitness_mean())
+
     plt.figure(figsize=(10, 6))
     plt.plot(generation, best_fitness, 'r-', label="Best Fitness")
     plt.plot(generation, avg_fitness, 'b-', label="Avg Fitness")
     plt.title(f"Egocentric RNN Training")
     plt.grid()
     plt.legend()
-    plt.savefig(os.path.join(RESULTS_DIR, "fitness_rnn.png"))
+    
+    try:
+        output_path = RESULTS_DIR / "fitness_rnn.png"
+        plt.savefig(output_path)
+    except Exception as e:
+        print(f"Plot saving error: {e}")
     plt.close()
 
 def plot_species(statistics):
-    """ Speciation Graph (Stacked Plot) - Correct Version """
+    """ Generates Speciation Stackplot. """
     print("📊 Generating Speciation Plot...")
     
-    # Official NEAT method to get the correct counts
-    # This fixes the "dict object has no attribute members" error
     species_sizes = statistics.get_species_sizes()
     
     if not species_sizes:
@@ -62,68 +69,63 @@ def plot_species(statistics):
         return
 
     num_generations = len(species_sizes)
-    
-    # Transpose the matrix to fit stackplot (Rows=Species, Cols=Generations)
     curves = np.array(species_sizes).T
 
     plt.figure(figsize=(12, 8))
     ax = plt.subplot(111)
     
     try:
-        # Use stackplot for the filled area effect
         ax.stackplot(range(num_generations), *curves)
         
         plt.title("Evolution of Species (Speciation)")
         plt.ylabel("Number of Genomes per Species")
         plt.xlabel("Generations")
-        plt.margins(0, 0) # Removes white side margins
+        plt.margins(0, 0)
         
-        # Ensure RESULTS_DIR is defined in your global scope
-        output_path = os.path.join(RESULTS_DIR, "speciation.png")
+        output_path = RESULTS_DIR / "speciation.png"
         plt.savefig(output_path)
-        print(f"✅ Speciation plot saved to: {output_path}")
+        print(f"✅ Speciation plot saved to: {output_path.name}")
         
     except Exception as e:
-        print(f"❌ Error during plotting: {e}")
-        # Debug info
-        print(f"   Curves shape: {curves.shape if hasattr(curves, 'shape') else 'Unknown'}")
+        print(f"❌ Plotting error: {e}")
     
     plt.close()
 
+# --- EVALUATION LOGIC ---
 
-# --- EVALUATION ---
 def eval_genome(genome, config):
-    # Usiamo RNN
+    # 1. Network: Recurrent (RNN)
     net = neat.nn.RecurrentNetwork.create(genome, config)
     
-    # Setup Ambiente
+    # 2. Env Setup
     try:
+        # Re-import for subprocess safety
+        from ocatari.core import OCAtari
         env = OCAtari(GAME_NAME, mode="ram", hud=False, render_mode=None)
     except Exception:
         return 0.0
     
     env = SpaceInvadersEgocentricWrapper(env, skip=4)
     
-    # --- MODIFICA ROBUSTEZZA: MEDIA SU 3 PARTITE ---
+    # --- ROBUSTNESS: AVERAGE OF 3 EPISODES ---
     n_episodes = 3
     total_fitness_acc = 0.0
     
-    # Per sicurezza sulla casualità nei processi paralleli
+    # Ensure randomness in parallel processes
     random.seed(os.getpid() + time.time())
     
     for _ in range(n_episodes):
-        # 1. Reset
+        # 3. Reset (No fixed seed for training)
         observation, info = env.reset(seed=None)
         
-        # 2. FIX CRITICO: RANDOM NO-OPS
-        # Senza questo, le 3 partite sarebbero identiche!
-        # Facciamo passare da 0 a 30 frame a vuoto per desincronizzare gli alieni.
+        # 4. CRITICAL FIX: RANDOM NO-OPS
+        # Desynchronize aliens by waiting 0-30 frames
         random_delay = random.randint(0, 30)
         for _ in range(random_delay):
             observation, _, terminated, truncated, _ = env.step(0) # 0 = NOOP
             if terminated or truncated: break
         
-        # Check sicurezza dopo il delay
+        # Safety Check
         if len(observation) != 19:
             env.close()
             return 0.0
@@ -134,7 +136,7 @@ def eval_genome(genome, config):
         truncated = False
         max_steps = 6000 
         
-        # 3. Reset memoria RNN per ogni episodio! (Molto importante)
+        # 5. RESET RNN MEMORY per episode!
         net.reset()
 
         while not (terminated or truncated) and steps < max_steps:
@@ -145,7 +147,7 @@ def eval_genome(genome, config):
             episode_reward += reward
             steps += 1
             
-        # Bonus sopravvivenza minimo
+        # Minimal survival bonus to differentiate early deaths
         if episode_reward == 0:
             episode_reward += (steps / 10000.0)
             
@@ -153,60 +155,68 @@ def eval_genome(genome, config):
 
     env.close()
 
-    # FITNESS FINALE = MEDIA DELLE 3 PARTITE
+    # FINAL FITNESS = AVERAGE OF 3 RUNS
     avg_fitness = total_fitness_acc / n_episodes
     
     return max(0.001, avg_fitness)
 
 # --- MAIN ---
+
 def run_training():
-    if not os.path.exists(CONFIG_PATH):
-        print(f"❌ Config non trovato: {CONFIG_PATH}")
+    print(f"📂 Loading Config: {CONFIG_PATH}")
+    if not CONFIG_PATH.exists():
+        print(f"❌ Config not found: {CONFIG_PATH}")
         return
 
     config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
                          neat.DefaultSpeciesSet, neat.DefaultStagnation,
-                         CONFIG_PATH)
+                         str(CONFIG_PATH))
 
-    # Assicurati che nel config ci sia feed_forward = False!
+    # Verify Config
     if config.genome_config.num_inputs != 19:
-        print(f"❌ ERRORE CONFIG: num_inputs deve essere 19!")
+        print(f"❌ CONFIG ERROR: num_inputs must be 19!")
         return
 
     p = neat.Population(config)
+    
     p.add_reporter(neat.StdOutReporter(True))
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
-    p.add_reporter(neat.Checkpointer(10, filename_prefix=os.path.join(RESULTS_DIR, "neat-rnn-chk-")))
+    
+    checkpoint_prefix = RESULTS_DIR / "neat-rnn-chk-"
+    p.add_reporter(neat.Checkpointer(10, filename_prefix=str(checkpoint_prefix)))
 
+    # Multiprocessing
     num_workers = max(1, multiprocessing.cpu_count() - 2)
+    print(f"🚀 Starting RNN Training on {num_workers} workers...")
+    
     pe = neat.ParallelEvaluator(num_workers, eval_genome)
     
     try:
-        print(f"🚀 Avvio Training RNN...")
         winner = p.run(pe.evaluate, GENERATIONS)
         
-        # Salvataggio vincitore singolo
-        with open(os.path.join(RESULTS_DIR, 'winner_ego.pkl'), 'wb') as f:
+        # Save Winner
+        with open(RESULTS_DIR / 'winner_ego.pkl', 'wb') as f:
             pickle.dump(winner, f)
         
-        # --- 3. MODIFICA: SALVATAGGIO TOP 3 ---
-        # Recuperiamo tutti i genomi, li ordiniamo e salviamo i migliori 3
+        # --- SAVE TOP 3 GENOMES ---
         all_genomes = list(p.population.values())
         all_genomes.sort(key=lambda g: g.fitness if g.fitness else 0.0, reverse=True)
         top_3 = all_genomes[:3]
         
-        top3_path = os.path.join(RESULTS_DIR, 'top3_list.pkl')
+        top3_path = RESULTS_DIR / 'top3_list.pkl'
         with open(top3_path, 'wb') as f:
             pickle.dump(top_3, f)
             
-        print(f"💾 Salvato winner_ego.pkl")
-        print(f"💾 Salvata lista Top 3 in: {top3_path}")
+        print(f"💾 Saved winner_ego.pkl")
+        print(f"💾 Saved Top 3 list to: {top3_path.name}")
 
+        # Generate Plots
         plot_stats(stats)
+        plot_species(stats)
         
     except Exception as e:
-        print(f"❌ ERRORE: {e}")
+        print(f"❌ CRITICAL ERROR: {e}")
         import traceback
         traceback.print_exc()
 

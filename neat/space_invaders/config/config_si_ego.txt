@@ -1,26 +1,26 @@
 [NEAT]
-fitness_criterion     = max
-fitness_threshold     = 10000
-pop_size              = 500
-reset_on_extinction   = False
+fitness_criterion      = max
+fitness_threshold      = 10000
+pop_size               = 500
+reset_on_extinction    = False
 no_fitness_termination = False
 
 [DefaultGenome]
-# === INPUT: 20 Nodi Sensoriali ===
+# === INPUT: 19 Sensory Nodes ===
 num_inputs            = 19
-# === OUTPUT: 4 Azioni (NOOP, FIRE, RIGHT, LEFT) ===
+# === OUTPUT: 4 Actions (NOOP, FIRE, RIGHT, LEFT) ===
 num_outputs           = 4
 num_hidden            = 0
 feed_forward          = True
 
-# --- STRUTTURA ---
-initial_connection      = partial_direct 0.5
+# --- STRUCTURE ---
+initial_connection    = partial_direct 0.5
 conn_add_prob         = 0.3
 conn_delete_prob      = 0.1
 node_add_prob         = 0.1
 node_delete_prob      = 0.05
 
-# --- PESI E BIAS ---
+# --- WEIGHTS & BIAS ---
 weight_init_mean      = 0.0
 weight_init_stdev     = 1.0
 weight_max_value      = 30.0
@@ -37,12 +37,12 @@ bias_mutate_power     = 0.5
 bias_mutate_rate      = 0.7
 bias_replace_rate     = 0.1
 
-# --- ATTIVAZIONI ---
+# --- ACTIVATIONS ---
 activation_default      = tanh
 activation_mutate_rate  = 0.1
 activation_options      = tanh sigmoid 
 
-# --- COMPATIBILITA ---
+# --- COMPATIBILITY ---
 compatibility_disjoint_coefficient = 1.5
 compatibility_weight_coefficient   = 0.5
 
@@ -55,7 +55,7 @@ response_mutate_power = 0.0
 response_mutate_rate  = 0.0
 response_replace_rate = 0.0
 
-# --- ALTRO ---
+# --- OTHER ---
 enabled_default         = True
 enabled_mutate_rate     = 0.01
 

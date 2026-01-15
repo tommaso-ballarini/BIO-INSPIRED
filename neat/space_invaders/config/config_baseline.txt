@@ -1,28 +1,28 @@
 [NEAT]
-fitness_criterion     = max
-fitness_threshold     = 5000
-pop_size              = 150
-reset_on_extinction   = False
+fitness_criterion      = max
+fitness_threshold      = 5000
+pop_size               = 150
+reset_on_extinction    = False
 no_fitness_termination = False
 
 [DefaultGenome]
 # === INPUT: 128 Byte RAM ===
 num_inputs            = 128
-# === OUTPUT: 6 Azioni (Atari Standard) ===
+# === OUTPUT: 6 Actions (Atari Standard) ===
 num_outputs           = 6
 num_hidden            = 0
 feed_forward          = True
 
-# --- STRUTTURA INIZIALE ---
-# Partiamo connessi parzialmente per non avere caos immediato
+# --- INITIAL STRUCTURE ---
+# Partial connection start (0.5) to avoid chaos
 initial_connection      = partial_direct 0.5
-# Probabilità mutazioni strutturali (standard)
+# Structural mutation probabilities
 conn_add_prob         = 0.2
 conn_delete_prob      = 0.1
 node_add_prob         = 0.1
 node_delete_prob      = 0.05
 
-# --- PESI E BIAS ---
+# --- WEIGHTS & BIAS ---
 weight_init_mean      = 0.0
 weight_init_stdev     = 1.0
 weight_max_value      = 30.0
@@ -39,13 +39,13 @@ bias_mutate_power     = 0.5
 bias_mutate_rate      = 0.7
 bias_replace_rate     = 0.1
 
-# --- ATTIVAZIONI ---
-# Sigmoide o Tanh vanno bene. Tanh è centrata sullo zero.
+# --- ACTIVATIONS ---
+# Tanh is zero-centered, often preferred
 activation_default      = tanh
 activation_mutate_rate  = 0.1
 activation_options      = tanh sigmoid relu
 
-# --- COMPATIBILITA (Speciazione) ---
+# --- COMPATIBILITY (Speciation) ---
 compatibility_disjoint_coefficient = 1.0
 compatibility_weight_coefficient   = 0.5
 
@@ -58,7 +58,7 @@ response_mutate_power = 0.0
 response_mutate_rate  = 0.0
 response_replace_rate = 0.0
 
-# --- ALTRO ---
+# --- OTHER ---
 enabled_default         = True
 enabled_mutate_rate     = 0.01
 
