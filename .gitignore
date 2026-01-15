@@ -21,27 +21,21 @@ env/
 
 # --- IMMAGINI E GRAFICI (Ignora ovunque) ---
 #*.png
-*.jpg
-*.jpeg
-*.svg
-*.pdf
-*.gif
+
 
 # --- LOG E STORICO ---
 *.log
-fitness_history.csv
-evolution_history.csv
+
 
 # --- CARTELLE DI OUTPUT SPECIFICHE ---
 # Ignora le cartelle della vecchia struttura
 #evolution_results/
-evolution_history/
-history/
+
 
 # --- CARTELLE DI OUTPUT NUOVA STRUTTURA ---
 # Il doppio asterisco (**) dice a git: "cerca in qualsiasi sottocartella"
 # Questo ignora 'results' dentro space_invaders, freeway, pacman, ecc.
-**/results/
+
 **/checkpoints/
 
 *.h
