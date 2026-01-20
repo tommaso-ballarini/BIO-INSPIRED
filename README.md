@@ -35,7 +35,7 @@ We benchmark our approach on three distinct Atari games, each testing specific e
 The best FFNN Dynamic agent successfully navigates all gates with human-competitive completion times (~48 seconds).
 
 <!-- Add your GIF/video here -->
-![Skiing Agent Demo](assets/skiing_demo.gif)
+![Skiing Best Run](assets/skiing_best_run.gif)
 
 ### Freeway
 The best FFNN (wrapper + shaped fitness) agent learns rhythmic timing patterns to cross ten lanes of traffic while minimizing collisions.
@@ -81,20 +81,14 @@ BIO-INSPIRED/
 │   │   ├── visualize/
 │   │   └── results/
 │   │
-│   ├── Freeway/
-│   │   ├── wrapper/
-│   │   ├── config/
-│   │   ├── run/
-│   │   ├── visualize/
-│   │   └── results/
+│   ├── Freeway/                             # Same structure as for Skiing in OPENEVOLVE
+│   │   ├── ...
 │   │
-│   └── SpaceInvaders/
-│       ├── wrapper/
-│       ├── config/
-│       ├── run/
-│       ├── visualize/
-│       └── results/
+│   └── SpaceInvaders/                       # Same structure as for Skiing in OPENEVOLVE
+│       ├── ...
 │
+├── human_benchmarks/                        # Scripts and results for human benchmark assessments
+│   └── ...
 ├── report/                                  # IEEE format project report
 │   └── EvoAtari_Report.pdf
 │
@@ -146,53 +140,21 @@ The tree above shows the two main experiment tracks (`Neat/` and `OpenEvolve/`),
 
 ---
 
-## The Critical Role of Environment Wrappers
+##  The Critical Role of Environment Wrappers
 
-Environment wrappers serve as **semantic filters** that transform raw Atari data into meaningful, compact representations suitable for neuroevolution.
+Directly utilizing the raw RAM of the Atari 2600 console (128 bytes) for training bio-inspired agents presents significant challenges. Although it encapsulates the entire game state, the raw information is often **inaccessible or misleading** for neural networks: many bytes remain unused, others dynamically shift function depending on game context, and decimal values lack linear correlation with physical quantities they represent.
 
-### Why Wrappers Are Essential
+To overcome these limitations, we adopt **environment-specific wrappers** built with the **OCAtari library**. These wrappers act as **semantic filters** that:
 
-**The Raw RAM Problem:**
+1. **Extract** high-level game concepts (gate centers, threat distances, velocities) using the RAM Extraction Method (REM)
+2. **Normalize** features to standardized ranges ([-1, 1] or [0, 1]) for stable neural network inputs
+3. **Reduce** input dimensionality drastically while preserving task-relevant information
 
-The Atari 2600's 128-byte RAM theoretically contains the complete game state, but is fundamentally incompatible with bio-inspired learning:
-- Many bytes are unused or serve internal functions unrelated to gameplay
-- Decimal values often lack linear correlation with physical quantities (positions, velocities)
-- No explicit relational information (distances to targets, alignment with goals)
-- 128-dimensional search space still hinders evolutionary convergence
+> **Key Insight**: Without wrappers, evolutionary algorithms converge to degenerate local minima. The wrapper is not an optimization—it's a **fundamental architectural requirement** for bio-inspired learning in complex Atari environments.
+> 
+---
 
-**The Pixel Alternative:**
-
-Raw pixel input (160×210×3 = 100,800 dimensions) is computationally infeasible for evolutionary algorithms, which lack the gradient-based optimization that enables deep learning to handle such high-dimensional spaces.
-
-### What Wrappers Provide
-
-Our custom wrappers implement a **two-stage preprocessing pipeline**:
-
-1. **Semantic Feature Extraction**: Compute high-level game concepts (gate centers, threat distances, velocities) from raw object properties using OCAtari's RAM Extraction Method
-2. **Normalization**: Scale all features to standardized ranges ([-1, 1] or [0, 1]) for stable neural network inputs
-
-### Impact on Performance
-
-**Skiing Example:**
-
-| Representation | Dimensions | Agent Behavior | Best Score |
-|----------------|------------|----------------|------------|
-| Raw RAM | 128 | Straight descent, crashes | -6528 |
-| **Custom Wrapper** | **9** | Gate-seeking, avoidance | **-4886** |
-
-The wrapper achieves **14× dimensionality reduction** while **improving performance by 26%**, demonstrating that semantically meaningful representations enable both efficiency and effectiveness.
-
-### Domain Knowledge Injection
-
-Wrappers encode task-specific intelligence:
-- **Skiing**: Gate center computation provides continuous alignment guidance
-- **Freeway**: Explicit velocity features (∆x) allow FFNNs to perceive motion without recurrence
-- **Space Invaders**: Egocentric ray-casting mimics human-like threat perception
-
-> **Key Insight**: Without wrappers, evolutionary algorithms converge to degenerate local minima (as shown in baseline experiments). The wrapper is not an optimization—it's a **fundamental architectural requirement** for bio-inspired learning in complex environments.
-
-
-## Experimental Configurations
+## Experiments
 
 ### Skiing
 
@@ -203,11 +165,25 @@ Wrappers encode task-specific intelligence:
 | **Wrapper (RNN)** | ✅ | ✅ | RNN | Same as FFNN with recurrent connections |
 | **Wrapper (FFNN Dyn.)** | ✅ | ✅ + Adaptive | FFNN | Progressive time penalty scaling |
 
-**Key Results:**
-- Baseline: Failed to complete course (stuck in local minimum)
-- FFNN Dynamic: **Best performance** (-4886 score, ~48s completion)
-- Standard FFNN: Conservative strategy (-5248 score)
-- RNN: Slowest among successful agents (-7152 score, ~72s)
+**Wrapper Type:** Object-Centric Slalom Wrapper (9 inputs)
+- Player dynamics (3 inputs): Horizontal position, ski orientation, velocity (∆x)
+- Target navigation (3 inputs): Lateral offset to gate center, vertical proximity, gate detection flag
+- Obstacle awareness (3 inputs): Nearest threat (x, y) position, threat type (tree/flag)
+
+**Fitness Function:**
+```
+F = Σ(R_gate + R_magnet - P_collision - P_boundary - P_time)
+```
+
+Where:
+- **R_gate**: Sparse impulse reward for clearing gates (+500)
+- **R_magnet**: Dense alignment gradient for horizontal positioning (+1.0 if aligned, -0.5×|∆x| otherwise)
+- **P_collision**: Collision penalty with obstacles (-10.0)
+- **P_boundary**: Track boundary violation penalty (-5.0)
+- **P_time**: Constant time penalty to encourage efficiency (-0.2 per frame)
+
+**Dynamic Variant**: Progressively increases time penalty once consistent gate completion is achieved, encouraging faster descent strategies.
+
 
 ### Freeway
 
@@ -252,74 +228,30 @@ where penalties/bonuses are conditioned on danger assessment.
 
 ---
 
-## Key Findings
-
-### Object-Centric Representations
-- **50× faster** than vision-based extraction
-- Compact state vectors (9-22 inputs) vs. raw pixel dimensions
-- Facilitates relational reasoning without high-dimensional search
-
-### Architecture Comparison
-- **FFNN**: Sufficient when wrapper provides velocity features (Skiing, Freeway)
-- **RNN**: Critical for temporal reasoning in dynamic environments (Space Invaders)
-- **Recurrence Overhead**: Minimal benefit in Markovian tasks (Skiing RNN underperformed)
-
-### Fitness Shaping Impact
-- **Baseline (no wrapper)**: Converged to degenerate strategies
-- **Dense rewards**: Enabled successful gate navigation in all wrapper-based Skiing configurations
-- **Adaptive penalties**: Dynamic FFNN achieved human-competitive performance through progressive time scaling
-
----
-
-## Methodology Highlights
-
-### NEAT Configuration
-
-**Common Parameters:**
-- Population size: 100 (Skiing/Freeway), 1000 (Space Invaders)
-- Generations: 150 (Skiing/Freeway), 300 (Space Invaders)
-- Speciation threshold: 3.5
-- Survival threshold: 20%
-- Elitism: 2 best genomes per species
-
-**Structural Mutations:**
-- Node addition: 30%
-- Node deletion: 20%
-- Connection add/delete: 50% each
-
-**Activation Functions:**
-- Default: `tanh`
-- Alternatives: `sigmoid`, `relu` (5% mutation rate)
-
-### State Preprocessing Pipeline
-
-1. **Object Extraction**: OCAtari REM retrieves semantic objects from RAM
-2. **Feature Computation**: High-level features (gate centers, nearest threats, velocities)
-3. **Normalization**: Scale all features to [-1, 1] or [0, 1] ranges
-4. **Network Input**: Feed compact vector to NEAT-evolved topology
-
----
-
-## Performance Metrics
+## Experimental setup
 
 All configurations are evaluated using a standardized protocol:
 - **Training Seeds**: Random seeds excluding the first 100
 - **Evaluation Seeds**: The first 100 seeds (held-out for testing)
 - **Runs per Configuration**: 100 episodes per agent
-- **Metrics**: Average score, best score
+- **Metrics**: Average score (+- standard deviation), best score
 
 ---
+## Results
 
-### Skiing (100 Evaluation Runs)
+### Skiing ###
 
-| Configuration | Avg Score | Best Score | Completion Rate |
-|---------------|-----------|------------|-----------------|
-| Baseline | -7646 | N/A | 0% |
-| Wrapper (RNN) | -6685 | -7152 | 100% |
-| Wrapper (FFNN) | -5581 | -5248 | 100% |
-| **Wrapper (FFNN Dyn.)** | **-5134** | **-4886** | **100%** |
+Since the native Atari score represents negative elapsed time, early termination can paradoxically yield higher values than slow completion. To ensure meaningful comparisons, the table below reports raw scores **conditioned on successful gate completion** (custom fitness > 9700), with the exception of the baseline (*), whose results reflect unconditional metrics. The 'Best Score' corresponds to the episode achieving the highest shaped fitness value, while 'n' indicates the number of successful runs (out of 100 evaluation episodes).
 
-*Note: Scores are conditioned on gate completion (fitness > 9700) except baseline.*
+| Configuration | n | Best Score | Avg Score | Notes |
+|---------------|---|------------|-----------|-------|
+| Baseline (no wrapper)* | N/A | -7922.0* | -7646.01 (±1305.43)* | Straight descent, no gate-seeking behavior |
+| Wrapper (FFNN) | 100 | -5248.0 | -5581.08 (±136.48) | Conservative strategy, perfect gate completion |
+| Wrapper (RNN) | 36 | -7152.0 | -7844.17 (±522.82) | Slower completion, lower success rate |
+| **Wrapper (FFNN Dynamic)** | **35** | **-4886.0** | **-5391.63 (±334.82)** | **Fastest descent, aggressive optimization** |
+| *Human Benchmark* | — | *-3385.00* | *-3736.57 (±299.27)* | *Expert-level performance* |
+
+---
 
 ### Freeway ###
 | Configuration | Best Score | Avg Score | Notes |
@@ -341,30 +273,26 @@ All configurations are evaluated using a standardized protocol:
 
 ---
 
-## Troubleshooting
 
-### Common Issues
+## Methodology Highlights ????
 
-**Issue**: `ModuleNotFoundError: No module named 'ocatari'`
-```bash
-pip install ocatari
-```
+### NEAT Configuration
 
-**Issue**: ALE ROMs not found
-```bash
-pip install gymnasium[atari,accept-rom-license]
-```
+**Common Parameters:**
+- Population size: 100 (Skiing/Freeway), 1000 (Space Invaders)
+- Generations: 150 (Skiing/Freeway), 300 (Space Invaders)
+- Speciation threshold: 3.5
+- Survival threshold: 20%
+- Elitism: 2 best genomes per species
 
-**Issue**: CUDA out of memory (if using GPU rendering)
-```bash
-# Use CPU rendering by setting render_mode="rgb_array" or None in wrapper
-```
+**Structural Mutations:**
+- Node addition: 30%
+- Node deletion: 20%
+- Connection add/delete: 50% each
 
-**Issue**: Training crashes with multiprocessing errors
-```bash
-# Reduce NUM_WORKERS in run scripts
-NUM_WORKERS = max(1, multiprocessing.cpu_count() - 4)
-```
+**Activation Functions:**
+- Default: `tanh`
+- Alternatives: `sigmoid`, `relu` (5% mutation rate)
 
 ---
 
