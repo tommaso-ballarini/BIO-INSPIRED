@@ -230,13 +230,13 @@ Where:
 * **Game State (3 inputs):** Tracks global game progression (alien fraction), UFO position, and UFO availability.
   
 **Fitness Function:**
-    $$F = \sum_{t=0}^{T} (R_{kill} + S_{aim} - P_{danger} - P_{spam})$$
+    $$F = \sum_{t=0}^{T} (R_{kill} + R_{aim} - P_{danger} - P_{spam})$$
     
 Where:
 
   &nbsp;- **$R_{kill}$**: Weighted bonus for alien elimination.
   
-   &nbsp;- **$S_{aim}$**: Dense alignment gradient rewarding horizontal synchronization with the nearest target.
+   &nbsp;- **$R_{aim}$**: Dense alignment gradient rewarding horizontal synchronization with the nearest target.
     
    &nbsp;- **$P_{danger}$**: Penalty for projectile proximity that scales as threats approach the player.
     
