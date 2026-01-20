@@ -5,37 +5,26 @@ import os
 import numpy as np
 import ale_py
 import json
-from datetime import datetime
 
-# --- 1. PATH SETUP & WRAPPER IMPORT ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
+project_root = os.path.dirname(current_dir)
 
-# Auto-locate wrapper folder
-if "wrapper" not in os.listdir(current_dir):
-    candidate_dir = current_dir
-    while "wrapper" not in os.listdir(candidate_dir) and os.path.dirname(candidate_dir) != candidate_dir:
-        candidate_dir = os.path.dirname(candidate_dir)
-    if "wrapper" in os.listdir(candidate_dir):
-        sys.path.append(candidate_dir)
-    else:
-        print("❌ Error: 'wrapper' folder not found.")
-        sys.exit(1)
+wrapper_dir = os.path.join(project_root, "neat", "skiing", "wrapper")
+
+if wrapper_dir not in sys.path:
+    sys.path.insert(0, wrapper_dir)
 
 try:
-    from wrapper.wrapper_rnn import BioSkiingOCAtariWrapper
-    WRAPPER_NAME = "RNN Wrapper"
-except ImportError:
-    try:
-        from wrapper.wrapper_ffnn import BioSkiingOCAtariWrapper
-        WRAPPER_NAME = "FFNN Wrapper"
-    except ImportError:
-        print("❌ Critical: Wrapper not found.")
-        sys.exit(1)
+    from wrapper_ffnn_dynamic import BioSkiingOCAtariWrapper
+    print(" Loaded: BioSkiingOCAtariWrapper")
+except ImportError as e:
+    print(f" Critical Error: {e}")
+    print(f" Looking in: {wrapper_dir}")
+    sys.exit(1)
 
 # --- CONFIGURATION ---
 FPS = 60
-JSON_FILE = os.path.join(current_dir, "human_stats.json")
+JSON_FILE = os.path.join(current_dir, "hb_skiing.json")
 
 def load_history():
     """Loads existing game history from JSON."""
@@ -116,21 +105,35 @@ def play_game():
     return run_native, run_custom
 
 def main():
-    print(f"\n👤 HUMAN BENCHMARK (Persistent Mode)")
+    print(f"\n HUMAN BENCHMARK (Persistent Mode)")
     print(f"   History File: {os.path.basename(JSON_FILE)}")
     print("-------------------------------------------------")
 
-    # 1. Play One Game
     native, custom = play_game()
     print(f"\n✅ Run Finished. Native: {native} | Custom: {custom:.1f}")
 
-    # 2. Update History
     history = load_history()
+    filepath = os.path.join("human_benchmarks", "hb_skiing.json")
     
-    new_entry = {
-        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    if os.path.exists(filepath):
+        try:
+            with open(filepath, 'r') as f:
+                data = json.load(f)
+        except:
+            data = []
+    else:
+        data = []
+
+    if data:
+        last_id = int(data[-1].get("id", "0"))
+        new_id = f"{last_id + 1:03d}"
+    else:
+        new_id = "001"
+
+    new_entry = {        
         "native": native,
-        "custom": custom
+        "custom": custom,
+        "id": new_id
     }
     history.append(new_entry)
     save_history(history)
@@ -149,7 +152,7 @@ def main():
 
     # 4. Report
     print("\n" + "="*60)
-    print("📊 UPDATED LIFETIME STATS")
+    print(" UPDATED LIFETIME STATS")
     print("="*60)
     print(f"TOTAL GAMES PLAYED: {len(history)}")
     print("-" * 30)

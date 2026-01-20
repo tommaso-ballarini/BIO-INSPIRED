@@ -5,32 +5,26 @@ import os
 import numpy as np
 import json
 import ale_py
-from datetime import datetime
 
-# --- 1. PATH SETUP & WRAPPER IMPORT ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
+project_root = os.path.dirname(current_dir) 
 
-# Auto-locate wrapper folder
-if "wrapper" not in os.listdir(current_dir):
-    candidate_dir = current_dir
-    while "wrapper" not in os.listdir(candidate_dir) and os.path.dirname(candidate_dir) != candidate_dir:
-        candidate_dir = os.path.dirname(candidate_dir)
-    if "wrapper" in os.listdir(candidate_dir):
-        sys.path.append(candidate_dir)
-    else:
-        sys.path.append(project_root)
+wrapper_dir = os.path.join(project_root, "neat", "freeway", "wrapper")
+
+if wrapper_dir not in sys.path:
+    sys.path.insert(0, wrapper_dir)
 
 try:
-    from wrapper.freeway_wrapper import FreewaySpeedWrapper
-    print("✅ Loaded: FreewaySpeedWrapper")
-except ImportError:
-    print("❌ Critical: FreewaySpeedWrapper not found. Check path.")
+    from freeway_wrapper import FreewaySpeedWrapper
+    print(" Loaded: FreewaySpeedWrapper")
+except ImportError as e:
+    print(f" Critical Error: {e}")
+    print(f" Looking in: {wrapper_dir}")
     sys.exit(1)
 
 # --- CONFIGURATION ---
 FPS = 60
-JSON_FILE = os.path.join(current_dir, "human_stats_freeway_comprehensive.json")
+JSON_FILE = os.path.join(current_dir, "hb_freeway.json")
 
 def load_history():
     if not os.path.exists(JSON_FILE): return []
@@ -43,7 +37,6 @@ def save_history(history):
 
 def play_game():
     """Runs a manual game calculating ALL fitness variants."""
-    
     try:
         raw_env = gym.make("ALE/Freeway-v5", obs_type="ram", render_mode="human")
         env = FreewaySpeedWrapper(raw_env, normalize=True, mirror_last_5=True)
@@ -138,14 +131,29 @@ def main():
     
     # 2. Save
     history = load_history()
-    stats["timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    filepath = os.path.join("human_benchmarks", "hb_freeway.json")
+    
+    if os.path.exists(filepath):
+        try:
+            with open(filepath, 'r') as f:
+                data = json.load(f)
+        except:
+            data = []
+    else:
+        data = []
+
+    if data:
+        last_id = int(data[-1].get("id", "0"))
+        new_id = f"{last_id + 1:03d}"
+    else:
+        new_id = "001"
+
+    stats["id"] = new_id
     history.append(stats)
     save_history(history)
     
-    # 3. Calculate Averages
     total_runs = len(history)
     
-    # Helper to safely get mean (default 0 if key missing in old json entries)
     def get_avg(key):
         values = [g.get(key, 0.0) for g in history]
         return np.mean(values) if values else 0.0
@@ -157,7 +165,7 @@ def main():
     avg_simp = get_avg("fit_simple")
     
     # 4. Report
-    print(f"\n\n✅ RUN FINISHED.")
+    print(f"\n\n RUN FINISHED.")
     print("=" * 60)
     print(f"📊 LIFETIME STATISTICS (Total Runs: {total_runs})")
     print("=" * 60)

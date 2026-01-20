@@ -1,0 +1,302 @@
+[
+    {
+        "raw_score": 265.0,
+        "custom_fitness_ego": 383.1404763031003,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "001"
+    },
+    {
+        "raw_score": 415.0,
+        "custom_fitness_ego": 595.5823811650266,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "002"
+    },
+    {
+        "raw_score": 365.0,
+        "custom_fitness_ego": 524.7452382922165,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "003"
+    },
+    {
+        "raw_score": 475.0,
+        "custom_fitness_ego": 692.6814287662507,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "004"
+    },
+    {
+        "raw_score": 205.0,
+        "custom_fitness_ego": 289.02380972385396,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "005"
+    },
+    {
+        "raw_score": 685.0,
+        "custom_fitness_ego": 1006.505238246918,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "006"
+    },
+    {
+        "raw_score": 540.0,
+        "custom_fitness_ego": 782.9052382850647,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "007"
+    },
+    {
+        "raw_score": 590.0,
+        "custom_fitness_ego": 860.530476596355,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "008"
+    },
+    {
+        "raw_score": 340.0,
+        "custom_fitness_ego": 489.5761906695361,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "009"
+    },
+    {
+        "raw_score": 860.0,
+        "custom_fitness_ego": 1265.4371430826193,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "010"
+    },
+    {
+        "raw_score": 335.0,
+        "custom_fitness_ego": 478.8085716152177,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "011"
+    },
+    {
+        "raw_score": 360.0,
+        "custom_fitness_ego": 521.3309526515004,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "012"
+    },
+    {
+        "raw_score": 455.0,
+        "custom_fitness_ego": 659.0323811936368,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "013"
+    },
+    {
+        "raw_score": 710.0,
+        "custom_fitness_ego": 1035.2052384471904,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "014"
+    },
+    {
+        "raw_score": 660.0,
+        "custom_fitness_ego": 968.0895239496225,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "015"
+    },
+    {
+        "raw_score": 340.0,
+        "custom_fitness_ego": 494.1466668558117,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "016"
+    },
+    {
+        "raw_score": 750.0,
+        "custom_fitness_ego": 1098.5433336663252,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "017"
+    },
+    {
+        "raw_score": 575.0,
+        "custom_fitness_ego": 840.7885716390605,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "018"
+    },
+    {
+        "raw_score": 510.0,
+        "custom_fitness_ego": 740.0314287686341,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "019"
+    },
+    {
+        "raw_score": 490.0,
+        "custom_fitness_ego": 710.0471430993076,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "020"
+    },
+    {
+        "raw_score": 970.0,
+        "custom_fitness_ego": 1433.2209525513651,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "021"
+    },
+    {
+        "raw_score": 270.0,
+        "custom_fitness_ego": 389.4342858242982,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "022"
+    },
+    {
+        "raw_score": 305.0,
+        "custom_fitness_ego": 436.6971430444716,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "023"
+    },
+    {
+        "raw_score": 745.0,
+        "custom_fitness_ego": 1097.0138097667696,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "024"
+    },
+    {
+        "raw_score": 685.0,
+        "custom_fitness_ego": 1001.5914288353919,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "025"
+    },
+    {
+        "raw_score": 970.0,
+        "custom_fitness_ego": 1431.684762177469,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "026"
+    },
+    {
+        "raw_score": 665.0,
+        "custom_fitness_ego": 975.5866669416424,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "027"
+    },
+    {
+        "raw_score": 570.0,
+        "custom_fitness_ego": 829.9871430730817,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "028"
+    },
+    {
+        "raw_score": 515.0,
+        "custom_fitness_ego": 747.414762046337,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "029"
+    },
+    {
+        "raw_score": 360.0,
+        "custom_fitness_ego": 523.5885715389247,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "030"
+    },
+    {
+        "raw_score": 345.0,
+        "custom_fitness_ego": 501.51238110303814,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "031"
+    },
+    {
+        "raw_score": 460.0,
+        "custom_fitness_ego": 661.9776192593574,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "032"
+    },
+    {
+        "raw_score": 495.0,
+        "custom_fitness_ego": 714.5247621464737,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "033"
+    },
+    {
+        "raw_score": 235.0,
+        "custom_fitness_ego": 339.7785715627666,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "034"
+    },
+    {
+        "raw_score": 775.0,
+        "custom_fitness_ego": 1132.512857389454,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "035"
+    },
+    {
+        "raw_score": 215.0,
+        "custom_fitness_ego": 305.00952393770126,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "036"
+    },
+    {
+        "raw_score": 525.0,
+        "custom_fitness_ego": 760.4280954742435,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "037"
+    },
+    {
+        "raw_score": 505.0,
+        "custom_fitness_ego": 733.2871430110929,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "038"
+    },
+    {
+        "raw_score": 750.0,
+        "custom_fitness_ego": 1096.5247621440903,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "039"
+    },
+    {
+        "raw_score": 640.0,
+        "custom_fitness_ego": 937.3700001120566,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "040"
+    },
+    {
+        "raw_score": 575.0,
+        "custom_fitness_ego": 834.6261907148366,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "041"
+    },
+    {
+        "raw_score": 515.0,
+        "custom_fitness_ego": 750.8433335185052,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "042"
+    },
+    {
+        "raw_score": 740.0,
+        "custom_fitness_ego": 1087.9900001382834,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "043"
+    },
+    {
+        "raw_score": 215.0,
+        "custom_fitness_ego": 310.0819048833844,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "044"
+    },
+    {
+        "raw_score": 545.0,
+        "custom_fitness_ego": 789.2390478730205,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "045"
+    },
+    {
+        "raw_score": 460.0,
+        "custom_fitness_ego": 663.6938097357754,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "046"
+    },
+    {
+        "raw_score": 540.0,
+        "custom_fitness_ego": 779.1476193118117,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "047"
+    },
+    {
+        "raw_score": 570.0,
+        "custom_fitness_ego": 829.3323811364197,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "048"
+    },
+    {
+        "raw_score": 515.0,
+        "custom_fitness_ego": 745.0038097524656,
+        "fitness_source": "6_run_ego_RNN_fit",
+        "id": "049"
+    },
+    {
+        "id": "050",
+        "raw_score": 770.0,
+        "custom_fitness_ego": 1125.9342858982095,
+        "fitness_source": "6_run_ego_RNN_fit"
+    }
+]

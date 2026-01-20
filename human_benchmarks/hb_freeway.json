@@ -1,0 +1,245 @@
+[
+    {
+        "raw_score": 25.0,
+        "steps": 2048,
+        "fit_aggressive": 1260.0,
+        "fit_balanced": 510.0,
+        "fit_timepen": 2499.52,
+        "fit_simple": 25.1,
+        "id": "001"
+    },
+    {
+        "raw_score": 26.0,
+        "steps": 2048,
+        "fit_aggressive": 1310.0,
+        "fit_balanced": 530.0,
+        "fit_timepen": 2599.52,
+        "fit_simple": 26.1,
+        "id": "002"
+    },
+    {
+        "raw_score": 25.0,
+        "steps": 2048,
+        "fit_aggressive": 1260.0,
+        "fit_balanced": 510.0,
+        "fit_timepen": 2499.52,
+        "fit_simple": 25.1,
+        "id": "003"
+    },
+    {
+        "raw_score": 23.0,
+        "steps": 2048,
+        "fit_aggressive": 1160.0,
+        "fit_balanced": 470.0,
+        "fit_timepen": 2299.52,
+        "fit_simple": 23.1,
+        "id": "004"
+    },
+    {
+        "raw_score": 16.0,
+        "steps": 2048,
+        "fit_aggressive": 810.0,
+        "fit_balanced": 330.0,
+        "fit_timepen": 1599.52,
+        "fit_simple": 16.1,
+        "id": "005"
+    },
+    {
+        "raw_score": 17.0,
+        "steps": 2048,
+        "fit_aggressive": 860.0,
+        "fit_balanced": 350.0,
+        "fit_timepen": 1699.52,
+        "fit_simple": 17.1,
+        "id": "006"
+    },
+    {
+        "raw_score": 26.0,
+        "steps": 2048,
+        "fit_aggressive": 1310.0,
+        "fit_balanced": 530.0,
+        "fit_timepen": 2599.52,
+        "fit_simple": 26.1,
+        "id": "007"
+    },
+    {
+        "raw_score": 30.0,
+        "steps": 2048,
+        "fit_aggressive": 1510.0,
+        "fit_balanced": 610.0,
+        "fit_timepen": 2999.52,
+        "fit_simple": 30.1,
+        "id": "008"
+    },
+    {
+        "raw_score": 15.0,
+        "steps": 2048,
+        "fit_aggressive": 760.0,
+        "fit_balanced": 310.0,
+        "fit_timepen": 1499.52,
+        "fit_simple": 15.1,
+        "id": "009"
+    },
+    {
+        "raw_score": 19.0,
+        "steps": 2048,
+        "fit_aggressive": 960.0,
+        "fit_balanced": 390.0,
+        "fit_timepen": 1899.52,
+        "fit_simple": 19.1,
+        "id": "010"
+    },
+    {
+        "raw_score": 24.0,
+        "steps": 2048,
+        "fit_aggressive": 1210.0,
+        "fit_balanced": 490.0,
+        "fit_timepen": 2399.52,
+        "fit_simple": 24.1,
+        "id": "011"
+    },
+    {
+        "raw_score": 25.0,
+        "steps": 2048,
+        "fit_aggressive": 1260.0,
+        "fit_balanced": 510.0,
+        "fit_timepen": 2499.52,
+        "fit_simple": 25.1,
+        "id": "012"
+    },
+    {
+        "raw_score": 29.0,
+        "steps": 2048,
+        "fit_aggressive": 1460.0,
+        "fit_balanced": 590.0,
+        "fit_timepen": 2899.52,
+        "fit_simple": 29.1,
+        "id": "013"
+    },
+    {
+        "raw_score": 25.0,
+        "steps": 2048,
+        "fit_aggressive": 1260.0,
+        "fit_balanced": 510.0,
+        "fit_timepen": 2499.52,
+        "fit_simple": 25.1,
+        "id": "014"
+    },
+    {
+        "raw_score": 25.0,
+        "steps": 2048,
+        "fit_aggressive": 1260.0,
+        "fit_balanced": 510.0,
+        "fit_timepen": 2499.52,
+        "fit_simple": 25.1,
+        "id": "015"
+    },
+    {
+        "raw_score": 27.0,
+        "steps": 2048,
+        "fit_aggressive": 1360.0,
+        "fit_balanced": 550.0,
+        "fit_timepen": 2699.52,
+        "fit_simple": 27.1,
+        "id": "016"
+    },
+    {
+        "raw_score": 26.0,
+        "steps": 2048,
+        "fit_aggressive": 1310.0,
+        "fit_balanced": 530.0,
+        "fit_timepen": 2599.52,
+        "fit_simple": 26.1,
+        "id": "017"
+    },
+    {
+        "raw_score": 28.0,
+        "steps": 2048,
+        "fit_aggressive": 1410.0,
+        "fit_balanced": 570.0,
+        "fit_timepen": 2799.52,
+        "fit_simple": 28.1,
+        "id": "018"
+    },
+    {
+        "raw_score": 30.0,
+        "steps": 2048,
+        "fit_aggressive": 1510.0,
+        "fit_balanced": 610.0,
+        "fit_timepen": 2999.52,
+        "fit_simple": 30.1,
+        "id": "019"
+    },
+    {
+        "raw_score": 25.0,
+        "steps": 2048,
+        "fit_aggressive": 1260.0,
+        "fit_balanced": 510.0,
+        "fit_timepen": 2499.52,
+        "fit_simple": 25.1,
+        "id": "020"
+    },
+    {
+        "raw_score": 28.0,
+        "steps": 2048,
+        "fit_aggressive": 1410.0,
+        "fit_balanced": 570.0,
+        "fit_timepen": 2799.52,
+        "fit_simple": 28.1,
+        "id": "021"
+    },
+    {
+        "raw_score": 31.0,
+        "steps": 2048,
+        "fit_aggressive": 1560.0,
+        "fit_balanced": 630.0,
+        "fit_timepen": 3099.52,
+        "fit_simple": 31.1,
+        "id": "022"
+    },
+    {
+        "raw_score": 29.0,
+        "steps": 2048,
+        "fit_aggressive": 1460.0,
+        "fit_balanced": 590.0,
+        "fit_timepen": 2899.52,
+        "fit_simple": 29.1,
+        "id": "023"
+    },
+    {
+        "raw_score": 26.0,
+        "steps": 2048,
+        "fit_aggressive": 1310.0,
+        "fit_balanced": 530.0,
+        "fit_timepen": 2599.52,
+        "fit_simple": 26.1,
+        "id": "024"
+    },
+    {
+        "raw_score": 21.0,
+        "steps": 2048,
+        "fit_aggressive": 1060.0,
+        "fit_balanced": 430.0,
+        "fit_timepen": 2099.52,
+        "fit_simple": 21.1,
+        "id": "025"
+    },
+    {
+        "raw_score": 25.0,
+        "steps": 2048,
+        "fit_aggressive": 1260.0,
+        "fit_balanced": 510.0,
+        "fit_timepen": 2499.52,
+        "fit_simple": 25.1,
+        "id": "026"
+    },
+    {
+        "raw_score": 28.0,
+        "steps": 2048,
+        "fit_aggressive": 1410.0,
+        "fit_balanced": 570.0,
+        "fit_timepen": 2799.52,
+        "fit_simple": 28.1,
+        "id": "027"
+    }
+]
