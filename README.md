@@ -333,7 +333,7 @@ This project demonstrates that **Semantic State Representation** is the single m
 ## Contacts
 
 For questions or collaboration inquiries:
-- Tommaso Ballarini: [tommaso.ballarini@studenti.unitn.it]
+- Tommaso Ballarini: [tommaso.ballarini-1@studenti.unitn.it]
 - Chiara Belli: [chiara.belli@studenti.unitn.it]
 - Elisa Negrini: [elisa.negrini@studenti.unitn.it]
 
