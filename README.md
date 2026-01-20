@@ -10,9 +10,9 @@
 
 ---
 
-## 📋 Overview
+## Overview
 
-This project investigates **neuroevolutionary approaches** to the Atari 2600 Arcade Learning Environment (ALE), focusing on **object-centric state representations** as an alternative to pixel-based deep reinforcement learning. We leverage **NEAT (NeuroEvolution of Augmenting Topologies)** combined with the **OCAtari library** to evolve compact neural networks capable of playing Atari games through semantic understanding rather than raw visual processing.
+This project investigates **neuroevolutionary approaches** to the Atari 2600 Arcade Learning Environment (ALE), focusing on **object-centric state representations** as an alternative to pixel-based deep reinforcement learning. We leverage **NEAT (NeuroEvolution of Augmenting Topologies)** combined with the **OCAtari library** and **OPENEVOLVE**, to evolve compact neural networks capable of playing Atari games through semantic understanding rather than raw visual processing. 
 
 Our approach addresses three fundamental challenges in neuroevolution for complex games:
 - **Sparse Rewards**: Custom fitness shaping wrappers provide dense, frame-by-frame guidance
@@ -29,7 +29,7 @@ We benchmark our approach on three distinct Atari games, each testing specific e
 
 ---
 
-## 🎮 Results Preview
+## Results Preview
 
 ### Skiing
 The best FFNN Dynamic agent successfully navigates all gates with human-competitive completion times (~48 seconds).
@@ -38,7 +38,7 @@ The best FFNN Dynamic agent successfully navigates all gates with human-competit
 ![Skiing Agent Demo](assets/skiing_demo.gif)
 
 ### Freeway
-The agent learns rhythmic timing patterns to cross ten lanes of traffic while minimizing collisions.
+The best FFNN (wrapper + shaped fitness) agent learns rhythmic timing patterns to cross ten lanes of traffic while minimizing collisions.
 
 <!-- Add your GIF/video here -->
 ![Freeway Agent Demo](assets/freeway_demo.gif)
@@ -50,7 +50,7 @@ The Egocentric RNN agent clears multiple waves, demonstrating emergent target pr
 ![Space Invaders Agent Demo](assets/space_invaders_demo.gif)
 
 ---
-##  🏗️ Repository Structure
+## Repository Structure
 ```
 
 BIO-INSPIRED/
@@ -102,9 +102,11 @@ BIO-INSPIRED/
 └── README.md                                # This file
 ```
 
+The tree above shows the two main experiment tracks (`Neat/` and `OpenEvolve/`), each organized per game with the same subfolders: wrappers for feature extraction, configs for NEAT hyperparameters, run scripts for training, visualization utilities, and results for saved models and plots. The root also includes the paper report and a shared `requirements.txt` so the environment is consistent across both tracks.
+
 ---
 
-## 🚀 Setup Instructions
+## Setup Instructions
 
 ### Prerequisites
 
@@ -144,7 +146,7 @@ BIO-INSPIRED/
 
 ---
 
-## 🎯 The Critical Role of Environment Wrappers
+## The Critical Role of Environment Wrappers
 
 Environment wrappers serve as **semantic filters** that transform raw Atari data into meaningful, compact representations suitable for neuroevolution.
 
@@ -189,55 +191,8 @@ Wrappers encode task-specific intelligence:
 
 > **Key Insight**: Without wrappers, evolutionary algorithms converge to degenerate local minima (as shown in baseline experiments). The wrapper is not an optimization—it's a **fundamental architectural requirement** for bio-inspired learning in complex environments.
 
----
 
-
-## 🎯 Quick Start
-
-### Training Agents (in case you want to train)
-
-#### Skiing FFNN Dynamic (Best Performance)
-```bash
-python run_scripts/run_wrapper_ffnn_dynamic.py
-```
-
-#### Freeway
-```bash
-python run_scripts/run_freeway.py
-```
-
-#### Space Invaders
-```bash
-python run_scripts/run_space_invaders.py
-```
-
-Training progress will be displayed in the console, and results will be saved in `evolution_results/`.
-
-### Visualizing Trained Agents
-
-You can visualize the best agent (you can directly visualize without training as we provided the .pkl):
-```bash
-# Skiing
-python visualization/visualize_skiing.py
-
-# Freeway
-python visualization/visualize_freeway.py 
-
-# Space Invaders
-python visualization/visualize_space_invaders.py 
-```
-
-### Evaluation Protocol
-
-All configurations are evaluated using a standardized protocol:
-- **Training Seeds**: Random seeds excluding the first 100
-- **Evaluation Seeds**: The first 100 seeds (held-out for testing)
-- **Runs per Configuration**: 100 episodes per agent
-- **Metrics**: Average score, best score
-
----
-
-## 🧪 Experimental Configurations
+## Experimental Configurations
 
 ### Skiing
 
@@ -256,15 +211,27 @@ All configurations are evaluated using a standardized protocol:
 
 ### Freeway
 
+| Configuration | Wrapper | Fitness Shaping | Architecture | Description |
+|---------------|---------|-----------------|--------------|-------------|
+| **Baseline** | ❌ | ❌ | FFNN | Raw RAM input, native sparse rewards |
+| **FFNN (wrapper)** | ✅ | ❌ | FFNN | Object-centric state, native sparse rewards |
+| **FFNN (wrapper + fitness)** | ✅ | ✅ | FFNN | Object-centric state, dense rewards |
+| **RNN (wrapper)** | ✅ | ❌  | RNN | Same as FFNN (wrapper) with recurrent connections |
+| **RNN (wrapper + fitness)** | ✅ | ✅ | RNN | Same as FFNN (wrapper + fitness) with recurrent connections |
+
+
 **Wrapper Type:** Speed-Aware RAM Wrapper (22 inputs)
-- Agent state: Vertical position + collision flag
-- Traffic state: 10 lane horizontal positions
-- Temporal dynamics: 10 velocity features (∆x per lane)
+- Agent state (2 inputs): Vertical position + collision flag
+- Traffic state (10 inputs): 10 lane horizontal positions
+- Temporal dynamics (10 inputs): 10 velocity features (∆x per lane)
+
 
 **Fitness Function:**
 ```
-F = R_crossing + R_ymax - P_collision - P_time
+F = Σ(R_crossing + R_ymax - P_collision - P_time)
 ```
+
+
 
 ### Space Invaders
 
@@ -285,7 +252,7 @@ where penalties/bonuses are conditioned on danger assessment.
 
 ---
 
-## 📊 Key Findings
+## Key Findings
 
 ### Object-Centric Representations
 - **50× faster** than vision-based extraction
@@ -304,7 +271,7 @@ where penalties/bonuses are conditioned on danger assessment.
 
 ---
 
-## 🔬 Methodology Highlights
+## Methodology Highlights
 
 ### NEAT Configuration
 
@@ -333,7 +300,15 @@ where penalties/bonuses are conditioned on danger assessment.
 
 ---
 
-## 📈 Performance Metrics
+## Performance Metrics
+
+All configurations are evaluated using a standardized protocol:
+- **Training Seeds**: Random seeds excluding the first 100
+- **Evaluation Seeds**: The first 100 seeds (held-out for testing)
+- **Runs per Configuration**: 100 episodes per agent
+- **Metrics**: Average score, best score
+
+---
 
 ### Skiing (100 Evaluation Runs)
 
@@ -346,6 +321,15 @@ where penalties/bonuses are conditioned on danger assessment.
 
 *Note: Scores are conditioned on gate completion (fitness > 9700) except baseline.*
 
+### Freeway ###
+| Configuration | Best Score | Avg Score | Notes |
+|---------------|------------|-----------|-------|
+| Baseline | 20.0 | 17.07 (±1.12) | Managed to complete some crossings, but stuck in collision-recovery cycles |
+| FFNN (wrapper) | 21.0 | 19.51 (±0.94) | Slightly more stable crossings, but limited improvement over baseline |
+| **FFNN (wrapper + fitness)** | **29.0** | **25.06 (±1.57)** | Consistent progress across lanes with fewer stalls |
+| RNN (wrapper) | 28.0 | 24.90 (±1.52) | Comparable to FFNN with wrapper, with no clear temporal advantage |
+| RNN (wrapper + fitness) | 28.0 | 23.92 (±1.73) | Similar to RNN (wrapper), fitness shaping does not add gains here |
+
 ### Space Invaders
 
 | Metric | Value |
@@ -357,7 +341,7 @@ where penalties/bonuses are conditioned on danger assessment.
 
 ---
 
-## 🛠️ Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -384,13 +368,13 @@ NUM_WORKERS = max(1, multiprocessing.cpu_count() - 4)
 
 ---
 
-## 📄 License
+## License
 
 This project is developed for academic purposes as part of the Bio-Inspired Artificial Intelligence course at the University of Trento. 
 
 ---
 
-## 📧 Contact
+## Contact
 
 For questions or collaboration inquiries:
 - Tommaso Ballarini: [email]
@@ -399,11 +383,10 @@ For questions or collaboration inquiries:
 
 ---
 
-## 🔗 References
+## References
 
 [1] Mnih et al., "Human-level control through deep reinforcement learning," *Nature*, 2015.  
 [2] Bellemare et al., "The arcade learning environment: An evaluation platform for general agents," *JAIR*, 2013.  
 [3] Delfosse et al., "OCAtari: Object-centric atari 2600 reinforcement learning environments," *arXiv:2306.08649*, 2023.  
 [4] Delfosse et al., "Interpretable concept bottlenecks to align reinforcement learning agents," *NeurIPS*, 2024.  
 [5] Machado et al., "Revisiting the arcade learning environment: Evaluation protocols and open problems for general agents," *JAIR*, 2018.
-
