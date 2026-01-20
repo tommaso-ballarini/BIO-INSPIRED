@@ -176,38 +176,49 @@ We utilize the **OCAtari** library to perform RAM Extraction Methods (REM). This
 
 To bridge the gap between sparse native rewards and evolutionary search, we designed custom **Fitness Shaping Functions** for each environment.
 
+────────────────────────────────────────────────────────
 #### 🎿 Skiing (Sparse Rewards)
 **State Representation (9 Inputs)**:
 * **Player Dynamics (3 inputs):** The agent's normalized horizontal position, ski orientation, and horizontal velocity ($x - x_{prev}$).
 * **Target Navigation (3 inputs):** Guidance towards the next gate via lateral offset to the gate center, vertical proximity, and a binary gate detection flag.
 * **Obstacle Awareness (3 inputs):** Relative $(x, y)$ coordinates of the nearest threat (tree or flag) and a categorical indicator distinguishing the type of obstacle.
 
-  **Fitness Function:**
+**Fitness Function:**
     $$F = \sum_{t=0}^{T} (R_{gate} + R_{magnet} - P_{collision} - P_{boundary} - P_{time})$$
   
-  Where:
-    - **R_kill**: Weighted bonus for alien elimination 
-    - **S_aim**: Dense alignment gradient rewarding horizontal synchronization with the nearest target 
-    - **P_danger**: Penalty for projectile proximity that scales as threats approach the player 
-    - **P_spam**: Penalty for firing cooldown abuse to discourage random shooting 
+Where:
+  
+  &nbsp;- **$R_{kill}$**: Weighted bonus for alien elimination 
+  
+  &nbsp;- **$S_{aim}$**: Dense alignment gradient rewarding horizontal synchronization with the nearest target 
+  
+  &nbsp;- **$P_{danger}$**: Penalty for projectile proximity that scales as threats approach the player 
+  
+  &nbsp;- **$P_{spam}$**: Penalty for firing cooldown abuse to discourage random shooting 
 
+────────────────────────────────────────────────────────
 #### 🐔 Freeway (Synchronization)
 **State Representation (22 Inputs)**:
 * **Agent State (2 inputs):** Normalized vertical position ($y_{norm}$) and a binary collision flag.
 * **Traffic State (10 inputs):** Horizontal positions ($x$) of the cars in each of the ten lanes, normalized to screen width.
 * **Temporal Dynamics (10 inputs):** Computed velocities ($\Delta x$) for each car. This allows the network to perceive motion and direction without requiring frame-stacking or recurrent memory.
 
-   **Fitness Function:**
+**Fitness Function:**
     $$F = \sum_{t=0}^{T} (R_{crossing} + R_{ymax} - P_{collision} - P_{time})$$
 
   Where:
-    - **$R_{crossing}$**: Reward for the number of successful crossings.
-    - **$R_{ymax}$**: Dense reward for the maximum normalized vertical progress achieved in the current attempt (provided even if no crossing is completed).
-    - **$P_{collision}$**: Penalty inferred on the total count of collisions.
-    - **$P_{timepenalty}$**: Penalty given for the total number of elapsed frames.
+  
+  
+  &nbsp;- **$R_{crossing}$**: Reward for the number of successful crossings.
+    
+  &nbsp;- **$R_{ymax}$**: Dense reward for the maximum normalized vertical progress achieved in the current attempt (provided even if no crossing is completed).
+    
+  &nbsp;- **$P_{collision}$**: Penalty inferred on the total count of collisions.
+    
+  &nbsp;- **$P_{timepenalty}$**: Penalty given for the total number of elapsed frames.
 
 
-
+────────────────────────────────────────────────────────
 #### 👾 Space Invaders (Dynamic Complexity)
 **State Representation (19 Inputs)**:
 * **Player Position (1 input):** Recalibrated normalized horizontal coordinate ($P_x$) within the playable area.
@@ -215,14 +226,18 @@ To bridge the gap between sparse native rewards and evolutionary search, we desi
 * **Targeting & Strategy (5 inputs):** Normalized relative horizontal distance to the nearest bottom-row alien ($x_{alien} - P_x$) and the enemy count across four quadrants.
 * **Game State (3 inputs):** Tracks global game progression (alien fraction), UFO position, and UFO availability.
   
-  **Fitness Function:**
+**Fitness Function:**
     $$F = \sum_{t=0}^{T} (R_{kill} + S_{aim} - P_{danger} - P_{spam})$$
     
-    Where:
-    - **$R_{kill}$**: Weighted bonus for alien elimination.
-    - **$S_{aim}$**: Dense alignment gradient rewarding horizontal synchronization with the nearest target.
-    - **$P_{danger}$**: Penalty for projectile proximity that scales as threats approach the player.
-    - **$P_{spam}$**: Penalty for firing cooldown abuse to discourage random shooting.
+Where:
+
+  &nbsp;- **$R_{kill}$**: Weighted bonus for alien elimination.
+  
+   &nbsp;- **$S_{aim}$**: Dense alignment gradient rewarding horizontal synchronization with the nearest target.
+    
+   &nbsp;- **$P_{danger}$**: Penalty for projectile proximity that scales as threats approach the player.
+    
+   &nbsp;- **$P_{spam}$**: Penalty for firing cooldown abuse to discourage random shooting.
 
 
 ---
@@ -236,7 +251,7 @@ The effectiveness of structural neuroevolution was evaluated across the three en
 
 | Configuration | Best Score | Avg Score | Notes |
 | :--- | :--- | :--- | :--- |
-| **Baseline** (Raw RAM) | -7922.0 | -7646 (±1305) | Failed. Agent descends straight down to minimize time. |
+| **Baseline** (Raw RAM) | -6528.0 | -6401.64 (±718.51) | Failed. Agent descends straight down to minimize time (local minima). |
 | **Wrapper + FFNN** | -5248.0 | -5581 (±136) | Successful gate completion but conservative speed. |
 | **Wrapper + RNN** | -7152.0 | -7844 (±522) | High variance; memory didn't help with static obstacles. |
 | **Wrapper + FFNN (Dyn)** | **-4886.0** | **-5391 (±335)** | **Best Agent.** Dynamic time penalty forced faster descent. |
@@ -244,6 +259,7 @@ The effectiveness of structural neuroevolution was evaluated across the three en
 
 > **Key Insight:** The "Dynamic" fitness variant was crucial. By progressively increasing the time penalty only *after* the agent learned to hit gates, we prevented the "reckless skiing" local minimum.
 
+────────────────────────────────────────────────────────
 ### 2. Freeway
 *Challenge: Synchronization and local optima.*
 
@@ -258,6 +274,7 @@ The effectiveness of structural neuroevolution was evaluated across the three en
 
 > **Key Insight:** The continuous fitness shaping ($R_{ymax}$) solved the deadlock issue. The FFNN outperformed the RNN, suggesting that with velocity inputs included in the wrapper, the task is Markovian (no memory needed).
 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 ### 3. Space Invaders
 *Challenge: Dynamic complexity and multi-agent tracking.*
 
