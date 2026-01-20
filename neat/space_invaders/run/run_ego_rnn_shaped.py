@@ -34,9 +34,9 @@ GENERATIONS = 300
 NUM_WORKERS = max(1, multiprocessing.cpu_count() - 2)
 
 # --- TRAINING SEED CONFIG ---
-TRAINING_SEED_MIN = 100      # Seeds < 100 reserved for testing
-TRAINING_SEED_MAX = 100000   # Broad range for training
-EPISODES_PER_GENOME = 3      # Average over 3 games for robustness
+TRAINING_SEED_MIN = 100      
+TRAINING_SEED_MAX = 100000   
+EPISODES_PER_GENOME = 3      
 
 print(f"✅ Config: {GAME_NAME} (RNN + Survival Logic + Seed {TRAINING_SEED_MIN}+)")
 
@@ -53,7 +53,7 @@ def plot_stats(statistics):
     plt.figure(figsize=(10, 6))
     plt.plot(generation, best_fitness, 'r-', label="Best Fitness")
     plt.plot(generation, avg_fitness, 'b-', label="Avg Fitness")
-    plt.title(f"Egocentric RNN Training (Survival)")
+    plt.title(f"Egocentric RNN Training Custom Fitness")
     plt.grid()
     plt.legend()
     

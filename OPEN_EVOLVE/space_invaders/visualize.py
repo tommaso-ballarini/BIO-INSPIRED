@@ -8,7 +8,7 @@ from tqdm import tqdm
 from ocatari.core import OCAtari
 
 # --- CONFIGURATION ---
-AGENT_PATH = r"OPEN_EVOLVE\space_invaders\results\run_si_20260107_153440_best\interesting_agents\agent_1599_pts_1767819509889.py" # PASTE HERE YOUR EXACT AGENT PATH   
+AGENT_PATH = r"OPEN_EVOLVE\space_invaders\results\run_si_20260109_153440_best\interesting_agents\agent_1599_pts_1767819509889.py" # PASTE HERE YOUR EXACT AGENT PATH   
 
 
 VISUALIZATION_SEED = 42
