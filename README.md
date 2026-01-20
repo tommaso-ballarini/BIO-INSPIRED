@@ -35,7 +35,7 @@ We benchmark our approach on three distinct Atari games, each testing specific e
 The best FFNN Dynamic agent successfully navigates all gates with human-competitive completion times (~48 seconds).
 
 <!-- Add your GIF/video here -->
-![Skiing Best Run](assets/skiing_best_run.gif)
+![Skiing Best Run](assets/Skiing_NEAT.gif)
 
 ### Freeway
 The best FFNN (wrapper + shaped fitness) agent learns rhythmic timing patterns to cross ten lanes of traffic while minimizing collisions.
@@ -47,7 +47,52 @@ The best FFNN (wrapper + shaped fitness) agent learns rhythmic timing patterns t
 The Egocentric RNN agent clears multiple waves, demonstrating emergent target prioritization and UFO sniping.
 
 <!-- Add your GIF/video here -->
-![Space Invaders Agent Demo](assets/space_invaders_demo.gif)
+![Space Invaders Agent Demo](assets/SI_NEAT.gif)
+
+## Results Preview
+
+### Skiing
+The best FFNN Dynamic agent successfully navigates all gates with human-competitive completion times (~48 seconds), while the OpenEvolve agent finds an even more efficient path.
+
+<table width="100%">
+  <tr>
+    <th width="50%">NEAT Agent (FFNN Dynamic)</th>
+    <th width="50%">OpenEvolve Agent (Gen 1500)</th>
+  </tr>
+  <tr>
+    <td><img src="assets/Skiing_NEAT.gif" alt="Skiing NEAT Run" width="100%"></td>
+    <td><img src="assets/Skiing_Open_Evolve.gif" alt="Skiing OpenEvolve Run" width="100%"></td>
+  </tr>
+</table>
+
+### Freeway
+The best FFNN (wrapper + shaped fitness) agent learns rhythmic timing patterns to cross ten lanes. Comparison shows NEAT's frame-perfect reactivity vs OpenEvolve's conservative strategy.
+
+<table width="100%">
+  <tr>
+    <th width="50%">NEAT Agent (FFNN Wrapper)</th>
+    <th width="50%">OpenEvolve Agent (Conservative)</th>
+  </tr>
+  <tr>
+    <td><img src="assets/freeway_demo.gif" alt="Freeway NEAT Run" width="100%"></td>
+    <td><img src="assets/Freeway_Open_Evolve.gif" alt="Freeway OpenEvolve Run" width="100%"></td>
+  </tr>
+</table>
+
+### Space Invaders
+The Egocentric RNN agent demonstrates emergent target prioritization (UFO sniping), while the OpenEvolve agent shows robust generalized behavior across random seeds.
+
+<table width="100%">
+  <tr>
+    <th width="50%">NEAT Agent (Egocentric RNN)</th>
+    <th width="50%">OpenEvolve Agent (Generalist)</th>
+  </tr>
+  <tr>
+    <td><img src="assets/SI_NEAT.gif" alt="Space Invaders NEAT Run" width="100%"></td>
+    <td><img src="assets/SI_Open_Evolve.gif" alt="Space Invaders OpenEvolve Run" width="100%"></td>
+  </tr>
+</table>
+
 
 ---
 ## Repository Structure
@@ -207,11 +252,19 @@ Where:
 F = Σ(R_crossing + R_ymax - P_collision - P_time)
 ```
 
-
-
 ### Space Invaders
 
+| Configuration | Wrapper | Fitness Shaping | Architecture | Description |
+|---------------|---------|-----------------|--------------|-------------|
+| **Baseline** | ❌ | ❌ | FFNN | Raw RAM input (128 bytes), native scoring |
+| **Column FFNN** | ✅ (Col) | ❌ | FFNN | Fixed column-based features, no memory |
+| **Column RNN** | ✅ (Col) | ❌ | RNN | Column features + recurrent memory for projectiles |
+| **Column RNN Fit** | ✅ (Col) | ✅ | RNN | Column features + dense rewards |
+| **Egocentric RNN** | ✅ (Ego) | ❌ | RNN | Relative coordinates (player-centric), native scoring |
+| **Egocentric RNN Fit** | ✅ (Ego) | ✅ | RNN | Relative coordinates + Hierarchical Fitness |
+
 **Wrapper Type:** Egocentric Wrapper (19 inputs)
+- 1 recalibrated normalized horizontal player coordinate (Px) 
 - 5 proximity sensors (vertical ray-casting)
 - 5 temporal deltas (projectile velocity)
 - 1 targeting feature (nearest alien offset)
@@ -220,11 +273,18 @@ F = Σ(R_crossing + R_ymax - P_collision - P_time)
 
 **Architecture:** RNN (1000 population, 300 generations)
 
-**Hierarchical Fitness:**
+**Fitness Function:**
 ```
 F = Σ(R_kill + S_aim - P_danger - P_spam)
 ```
-where penalties/bonuses are conditioned on danger assessment.
+Where:
+- **R_kill**: Weighted bonus for alien elimination 
+- **S_aim**: Dense alignment gradient rewarding horizontal synchronization with the nearest target 
+- **P_danger**: Penalty for projectile proximity that scales as threats approach the player 
+- **P_spam**: Penalty for firing cooldown abuse to discourage random shooting 
+
+**Survival Conditioning**: The fitness explicitly weights penalties to override aggression when threats are imminent, teaching the agent to prioritize survival over immediate scoring.
+
 
 ---
 
@@ -262,25 +322,66 @@ Since the native Atari score represents negative elapsed time, early termination
 | RNN (wrapper) | 28.0 | 24.90 (±1.52) | Comparable to FFNN with wrapper, with no clear temporal advantage |
 | RNN (wrapper + fitness) | 28.0 | 23.92 (±1.73) | Similar to RNN (wrapper), fitness shaping does not add gains here |
 
+
 ### Space Invaders
 
-| Metric | Value |
-|--------|-------|
-| Peak Fitness | ~2700 |
-| Raw Game Score | 2380 points |
-| Waves Cleared | 2+ (partial 3rd wave) |
-| Emergent Behaviors | UFO sniping, threat prioritization |
+Experiments on Space Invaders were conducted iteratively to identify the optimal combination of state representation and reward shaping. Initial attempts with Raw RAM and Column-based wrappers lead to premature convergence. To overcome the dimensionality bottleneck, we transitioned to the Egocentric wrapper, scaling the evolutionary budget to more extended runs (population: 500, generations: 300) to match the complexity of the task.
 
+| Configuration | Avg Score | Best Score | Notes |
+|---------------|-----------|------------|-------|
+| Baseline (Raw RAM) | 221 (±156) | 760 | |
+| Column FFNN | 233 (±154) | 760 | |
+| Column RNN | 249 (±162) | 830 | |
+| Column RNN Fit | 167 (±106) | 615 | |
+| Egocentric RNN | 304 (±149) | 1050 | |
+| Egocentric RNN (ext. run) | 366 (±113) | 1880 | |
+| **Egocentric RNN Fit (ext. run)** | **421 (±120)** | **2380** | |
+| *Human Benchmark* | *527.40 (±188.93)* | *970.00* | |
 ---
 
+## OpenEvolve: LLM-Driven Code Evolution
+
+While NEAT optimizes weights within a growing topology, **OpenEvolve** shifts the evolutionary search from abstract neural matrices to **executable, interpretable Python code**.
+This framework leverages the semantic knowledge of Large Language Models (LLMs) to perform "intelligent mutations", effectively treating the LLM as a biological mutation operator.
+
+### The Framework
+
+* **Mutation Operator**: A local instance of **Qwen2.5-Coder-7B** (via Ollama) generates candidate solutions.
+* **Population Management**: Solutions are managed through a **MAP-Elites** database, indexing programs by score and algorithmic complexity to preserve diversity and prevent premature convergence.
+* **Setup**: To ensure a fair comparison, OpenEvolve agents interact with the exact same **OCAtari wrappers** and **custmized fitness** used in the NEAT experiments.
+
+### Evolutionary Pipeline
+
+The pipeline required specific adaptations to function effectively in the Atari context:
+
+1. **The "Meta-Genome"**: We designed a specialized System Prompt that acts as the genetic blueprint, setting operational constraints (e.g., "no external libraries") and optimization priorities without enforcing a specific strategy.
+2. **Full Rewrite Strategy**: The LLM generates valid Python code via a "Full Rewrite" approach, as the model proved unstable when attempting "Diff-Based" edits.
+3. **Cumulative Evolution**: We implemented an iterative strategy where the highest-performing code from generation $N$ serves as a **few-shot example** for generation $N+1$.
+   
+    > *Hypothesis:* Providing the LLM with its previous best attempt allows for iterative refinement, enabling the system to "debug" logic and optimize strategies incrementally over generations.
+
+### Comparative Analysis: NEAT vs. OpenEvolve
+
+To evaluate the efficacy of code evolution against standard neuroevolution, we benchmarked the best OpenEvolve agents against the optimal NEAT architectures identified in the previous experiments.
+
+| Environment | Metric | NEAT (Best Config) | OpenEvolve | 
+|:-----------:|:------:|:------------------:|:----------:|
+| **Skiing** | *Best Score* <br> *Avg Score* | -4886 <br> -5391.63 (±335) | **-3856** 🏆 <br> **-4004.96 (±86)** 🏆 | 
+| **Freeway** | *Best Score* <br> *Avg Score* | **29.0** 🏆 <br> **25.06 (±1.57)** 🏆 | 18.0 <br> 15.28 (±1.43) | 
+| **Space Inv.**| *Best Score* <br> *Avg Score* | **2380** 🏆 <br> 421 (±120) | 1495 <br> **517 (±212)** 🏆 | 
+
+**Possible Interpretation:**
+* **Skiing (Code Wins):** The LLM logic significantly outperformed neural approximations, finding a more efficient path and solving the sparse reward problem better.
+* **Freeway (Network Wins):** NEAT exploited frame-perfect reactive timing. OpenEvolve agents adopted a "conservative" strategy, waiting for safe gaps rather than risking collisions, resulting in lower throughput.
+* **Space Invaders (Trade-off):** While NEAT achieved a higher peak score by aggressively exploring "lucky" seeds (e.g., catching all the UFOs), OpenEvolve demonstrated superior **stability and generalization** (higher average score) across unseen environments.
 
 ## Methodology Highlights ????
 
 ### NEAT Configuration
 
 **Common Parameters:**
-- Population size: 100 (Skiing/Freeway), 1000 (Space Invaders)
-- Generations: 150 (Skiing/Freeway), 300 (Space Invaders)
+- Population size: 100 
+- Generations: 150 
 - Speciation threshold: 3.5
 - Survival threshold: 20%
 - Elitism: 2 best genomes per species
