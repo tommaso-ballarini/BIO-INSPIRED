@@ -16,7 +16,7 @@ gym.register_envs(ale_py)
 # --- EXPERIMENT CONFIGURATION ---
 ENV_ID = "ALE/Skiing-v5"
 CONFIG_FILE_NAME = "config_baseline.txt"
-NUM_GENERATIONS = 20
+NUM_GENERATIONS = 150
 TRAINING_SEED_MIN = 100      # Seed < 100 reserved for testing
 TRAINING_SEED_MAX = 100000  
 MAX_STEPS = 2000

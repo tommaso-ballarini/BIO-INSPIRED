@@ -241,5 +241,59 @@
         "fit_timepen": 2799.52,
         "fit_simple": 28.1,
         "id": "027"
+    },
+    {
+        "raw_score": 27.0,
+        "steps": 2048,
+        "fit_aggressive": 1360.0,
+        "fit_balanced": 550.0,
+        "fit_timepen": 2699.52,
+        "fit_simple": 27.1,
+        "id": "028"
+    },
+    {
+        "raw_score": 28.0,
+        "steps": 2048,
+        "fit_aggressive": 1410.0,
+        "fit_balanced": 570.0,
+        "fit_timepen": 2799.52,
+        "fit_simple": 28.1,
+        "id": "029"
+    },
+    {
+        "raw_score": 29.0,
+        "steps": 2048,
+        "fit_aggressive": 1460.0,
+        "fit_balanced": 590.0,
+        "fit_timepen": 2899.52,
+        "fit_simple": 29.1,
+        "id": "030"
+    },
+    {
+        "raw_score": 30.0,
+        "steps": 2048,
+        "fit_aggressive": 1510.0,
+        "fit_balanced": 610.0,
+        "fit_timepen": 2999.52,
+        "fit_simple": 30.1,
+        "id": "031"
+    },
+    {
+        "raw_score": 31.0,
+        "steps": 2048,
+        "fit_aggressive": 1560.0,
+        "fit_balanced": 630.0,
+        "fit_timepen": 3099.52,
+        "fit_simple": 31.1,
+        "id": "032"
+    },
+    {
+        "raw_score": 31.0,
+        "steps": 2048,
+        "fit_aggressive": 1560.0,
+        "fit_balanced": 630.0,
+        "fit_timepen": 3099.52,
+        "fit_simple": 31.1,
+        "id": "033"
     }
 ]

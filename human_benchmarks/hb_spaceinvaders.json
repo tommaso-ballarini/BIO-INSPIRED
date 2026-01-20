@@ -298,5 +298,29 @@
         "raw_score": 770.0,
         "custom_fitness_ego": 1125.9342858982095,
         "fitness_source": "6_run_ego_RNN_fit"
+    },
+    {
+        "id": "051",
+        "raw_score": 715.0,
+        "custom_fitness_ego": 1044.908095390799,
+        "fitness_source": "6_run_ego_RNN_fit"
+    },
+    {
+        "id": "052",
+        "raw_score": 460.0,
+        "custom_fitness_ego": 667.9909525489801,
+        "fitness_source": "6_run_ego_RNN_fit"
+    },
+    {
+        "id": "053",
+        "raw_score": 745.0,
+        "custom_fitness_ego": 1086.3809525084507,
+        "fitness_source": "6_run_ego_RNN_fit"
+    },
+    {
+        "id": "054",
+        "raw_score": 940.0,
+        "custom_fitness_ego": 1378.682381124501,
+        "fitness_source": "6_run_ego_RNN_fit"
     }
 ]
