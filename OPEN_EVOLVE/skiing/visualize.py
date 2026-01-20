@@ -6,11 +6,11 @@ import numpy as np
 from tqdm import tqdm
 
 # --- CONFIGURATION ---
-AGENT_PATH = r"OPEN_EVOLVE\skiing\results\run_skiing_20260108_195559_seedbest\best\best_program.py" # PASTE HERE YOUR EXACT AGENT PATH 
-VISUALIZATION_SEED = 61 
+AGENT_PATH = r"OPEN_EVOLVE\skiing\results\run_skiing_20260108_195559_cumulative\best\best_program.py" # PASTE HERE YOUR EXACT AGENT PATH 
+VISUALIZATION_SEED = 26 
 TEST_SEEDS_RANGE = range(0, 100) # The 100 "unseen" seeds (Test Set)
 MAX_STEPS = 2000
-FINISH_LINE_THRESHOLD = 9500.0 # Soglia per considerare la pista "finita"
+FINISH_LINE_THRESHOLD = 9500.0 
 
 # --- WRAPPER IMPORT SETUP ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -94,11 +94,8 @@ def main():
     for seed in tqdm(TEST_SEEDS_RANGE, desc="Simulating", unit="game"):
         n_score, c_score = run_simulation(get_action, seed=seed, render=False)
         
-        # --- NUOVA LOGICA DI PUNTEGGIO ---
         has_finished = c_score > FINISH_LINE_THRESHOLD
         
-        # Calcoliamo un "Native Score Aggiustato" per penalizzare chi si blocca
-        # Se non finisci, ti prendi -30.000 punti nativi extra.
         if not has_finished:
             adjusted_native = n_score - 30000.0
         else:
@@ -106,47 +103,56 @@ def main():
 
         results.append({
             'seed': seed,
-            'native': n_score,          # Punteggio reale visualizzato
-            'adjusted_native': adjusted_native, # Punteggio per ordinamento
+            'native': n_score,          
+            'adjusted_native': adjusted_native, 
             'custom': c_score,
             'finished': has_finished
         })
         
-    # 3. Statistical Analysis
+    # --- 3. Statistical Analysis ---
     native_scores = [r['native'] for r in results]
     custom_scores = [r['custom'] for r in results]
-    finished_count = sum(r['finished'] for r in results)
     
-    avg_native = np.mean(native_scores)
-    avg_custom = np.mean(custom_scores)
-    
-    # --- 4. FIND BEST SEEDS (Nuova Logica Intelligente) ---
-    
-    # Filtriamo solo le run che hanno completato la pista
     completed_runs = [r for r in results if r['finished']]
+    finished_count = len(completed_runs)
     
-    if completed_runs:
-        # SCENARIO A: Qualcuno ha finito!
-        # Vince chi ha il miglior Native Score (tempo minore) tra quelli che hanno finito.
-        # Nota: In skiing -10000 è meglio di -20000, quindi usiamo max()
+    avg_native_global = np.mean(native_scores)
+    avg_custom_global = np.mean(custom_scores)
+    
+    if finished_count > 0:
+        finished_natives = [r['native'] for r in completed_runs]
+        avg_native_finished = np.mean(finished_natives)
+        std_native_finished = np.std(finished_natives)
+        
         best_run = max(completed_runs, key=lambda x: x['native'])
         best_label = "🏆 BEST COMPLETED RUN (Speed King)"
     else:
-        # SCENARIO B: Nessuno ha finito (tutti incastrati o lenti)
-        # Vince chi ha la Custom Fitness più alta (chi è arrivato più lontano)
+        avg_native_finished = 0.0
+        std_native_finished = 0.0
+        
         best_run = max(results, key=lambda x: x['custom'])
         best_label = "⚠️ BEST AVAILABLE (No finish found)"
 
-    # Per il peggiore, usiamo il native score "aggiustato" (quindi chi si è bloccato finisce qui)
     worst_run = min(results, key=lambda x: x['adjusted_native'])
 
+    # --- 4. Final Report ---
     print("\n" + "="*60)
     print("📈  FINAL RESULTS")
     print("="*60)
-    print(f"COMPLETION RATE: {finished_count}/{len(TEST_SEEDS_RANGE)} runs finished (> {FINISH_LINE_THRESHOLD})")
-    print(f"OVERALL AVERAGE:")
-    print(f"   Native Score:   {avg_native:.2f} (± {np.std(native_scores):.2f})")
-    print(f"   Custom Fitness: {avg_custom:.2f} (± {np.std(custom_scores):.2f})")
+    
+    print(f"COMPLETION STATUS (> {FINISH_LINE_THRESHOLD} fitness):")
+    print(f"   -> Count: {finished_count} / {len(TEST_SEEDS_RANGE)} runs finished")
+    
+    if finished_count > 0:
+        print(f"   -> Avg Native (Finished Only): {avg_native_finished:.2f} (± {std_native_finished:.2f})")
+    else:
+        print(f"   -> Avg Native (Finished Only): N/A")
+        
+    print("-" * 30)
+    
+    print(f"GLOBAL AVERAGE (All Runs including failures):")
+    print(f"   Native Score:   {avg_native_global:.2f} (± {np.std(native_scores):.2f})")
+    print(f"   Custom Fitness: {avg_custom_global:.2f} (± {np.std(custom_scores):.2f})")
     print("-" * 30)
     
     print("💎  HALL OF FAME:")
