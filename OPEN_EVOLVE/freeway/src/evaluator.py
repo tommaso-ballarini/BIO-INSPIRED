@@ -24,9 +24,10 @@ from openevolve.evaluation_result import EvaluationResult
 ENV_NAME = 'ALE/Freeway-v5'
 MAX_STEPS_PER_GAME = 2000 
 NUM_GAMES_PER_EVAL = 3 
-EVAL_SEEDS = [42, 101, 999]
+EVAL_SEEDS = [42, 101, 999] # Optional
 
 def log_to_csv(score):
+    """Writes result to a shared CSV."""
     csv_path = os.environ.get("FREEWAY_HISTORY_PATH", "history_backup.csv")
     for _ in range(10):
         try:
@@ -40,6 +41,10 @@ def log_to_csv(score):
             time.sleep(random.random() * 0.1)
 
 def save_interesting_agent(code_string, score):
+    """
+    Saves agent code if score is interesting.
+    Avoids saving duplicates with the same exact integer score.
+    """
     try:
         csv_path = os.environ.get("FREEWAY_HISTORY_PATH", None)
         if csv_path:
@@ -53,6 +58,8 @@ def save_interesting_agent(code_string, score):
         score_int = int(score)
         prefix = f"agent_{score_int}_pts_"
         existing_agents = [f for f in os.listdir(save_dir) if f.startswith(prefix)]
+        
+        # Anti-clone: ignore if 2 or more agents exist with this score
         if len(existing_agents) >= 2: return
 
         filename = f"{prefix}{int(time.time()*1000)}.py"
@@ -65,12 +72,18 @@ def save_interesting_agent(code_string, score):
         print(f"Agent save error: {e}")
 
 def clean_llm_code(code_string: str) -> str:
+    """Removes markdown backticks."""
     pattern = r"```(?:python)?\s*(.*?)```"
     match = re.search(pattern, code_string, re.DOTALL)
     if match: return match.group(1).strip()
     return code_string.strip()
 
 def run_custom_simulation(action_function, specific_seed=None, visualization=False):
+    """
+    Runs a single simulation.
+    If specific_seed is None: use random seed > 100 (Training).
+    If specific_seed is Set: use specific seed (Test/Validation).
+    """
     render_mode = "human" if visualization else None
     try:
         raw_env = gym.make(ENV_NAME, obs_type="ram", render_mode=render_mode)
@@ -79,9 +92,12 @@ def run_custom_simulation(action_function, specific_seed=None, visualization=Fal
         print(f"Env create error: {e}")
         return 0.0
 
+    # --- RANDOM SEED LOGIC (TRAINING vs TEST) ---
     if specific_seed is None:
+        # Training: Random safe seed (> 100) per preservare i seed di test (0-99)
         current_seed = random.randint(100, 1000000)
     else:
+        # Test: Specific seed
         current_seed = specific_seed
     
     observation, info = env.reset(seed=current_seed)
@@ -111,6 +127,7 @@ def run_custom_simulation(action_function, specific_seed=None, visualization=Fal
     return total_reward
 
 def evaluate(input_data: str) -> EvaluationResult:
+    # 1. INPUT HANDLING
     code_to_exec = input_data
     if os.path.exists(input_data) and input_data.endswith('.py'):
         try:
@@ -119,8 +136,10 @@ def evaluate(input_data: str) -> EvaluationResult:
         except Exception:
             return EvaluationResult(metrics={'combined_score': -9999.0})
 
+    # 2. CLEANING
     cleaned_code = clean_llm_code(code_to_exec)
 
+    # 3. COMPILATION
     try:
         spec = importlib.util.spec_from_loader("agent_module", loader=None)
         agent_module = importlib.util.module_from_spec(spec)
@@ -135,16 +154,21 @@ def evaluate(input_data: str) -> EvaluationResult:
         log_to_csv(-9999.0) 
         return EvaluationResult(metrics={'combined_score': -9999.0})
 
+    # 4. SIMULATION (RANDOM TRAINING)
     total_score = 0
     for i in range(NUM_GAMES_PER_EVAL):
+        # Calls run_custom_simulation without seed -> triggers random seed > 100
         score = run_custom_simulation(action_function=get_action_func, visualization=False)
         total_score += score
 
     avg_score = total_score / NUM_GAMES_PER_EVAL
+    
+    # 5. LOGGING
     log_to_csv(avg_score)
 
-    # Save if score is decent (> 50.0)
-    if avg_score > 50.0:
+    # 6. SAVE THRESHOLD
+    # Save if score is decent (> 25.0, soglia tipica Freeway, adattabile)
+    if avg_score > 25.0:
         save_interesting_agent(cleaned_code, avg_score)
 
     return EvaluationResult(metrics={'combined_score': avg_score})
@@ -153,8 +177,11 @@ if __name__ == "__main__":
     try:
         import initial_agent
         print("Testing initial_agent (Validation Run)...")
+        
+        # Use reserved seed (< 100) for visual test
         TEST_SEED = 42 
         score = run_custom_simulation(initial_agent.get_action, specific_seed=TEST_SEED, visualization=True)
+        
         print(f"Seed Agent Score (Seed {TEST_SEED}): {score}")
     except ImportError:
         print("❌ Error: initial_agent.py not found!")

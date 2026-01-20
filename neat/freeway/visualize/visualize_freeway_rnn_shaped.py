@@ -21,7 +21,7 @@ except Exception:
     pass
 
 # --- CONFIGURATION ---
-RESULTS_DIR = freeway_root / "results" / "neat_freeway_rnn_shaped_timepenalty"
+RESULTS_DIR = freeway_root / "results" / "neat_freeway_rnn_shaped"
 CONFIG_FILENAME = "neat_freeway_config.txt"
 TEST_SEEDS = range(100)
 ENV_ID = "ALE/Freeway-v5"

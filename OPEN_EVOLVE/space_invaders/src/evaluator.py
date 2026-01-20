@@ -28,7 +28,6 @@ from openevolve.evaluation_result import EvaluationResult
 ENV_NAME = 'ALE/SpaceInvaders-v5'
 MAX_STEPS_PER_GAME = 4000
 NUM_GAMES_PER_EVAL = 3
-# EVAL_SEEDS rimosso perché ora usiamo random.randint(100, 1000000)
 
 def log_to_csv(score):
     """Writes result to a shared CSV."""

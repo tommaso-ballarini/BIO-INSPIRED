@@ -7,6 +7,8 @@ import neat
 import matplotlib.pyplot as plt
 import gymnasium as gym
 import ale_py
+import random
+import time
 from pathlib import Path
 
 # --- PATH CONFIGURATION ---
@@ -33,12 +35,14 @@ CONFIG_PATH = project_root / 'config' / 'config_si_columns.txt'
 RESULTS_DIR = project_root / 'results'
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
-GAME_NAME = "SpaceInvadersNoFrameskip-v4"
-GENERATIONS = 30
-FIXED_SEED = 42 
+GAME_NAME = "ALE/SpaceInvaders-v5"
+GENERATIONS = 50
+TRAINING_SEED_MIN = 100
+TRAINING_SEED_MAX = 100000
+EPISODES_PER_GENOME = 3
 
 print(f"✅ Env Config: {GAME_NAME} with Column Wrapper (FFNN Mode)")
-print(f"🔒 Fixed Seed: {FIXED_SEED}")
+print(f"🔄 Training: Average of {EPISODES_PER_GENOME} episodes (Seeds {TRAINING_SEED_MIN}+)")
 
 # --- PLOTTING FUNCTIONS ---
 
@@ -55,7 +59,7 @@ def plot_stats(statistics):
     plt.figure(figsize=(10, 6))
     plt.plot(generation, best_fitness, 'r-', label="Best Fitness")
     plt.plot(generation, avg_fitness, 'b-', label="Avg Fitness")
-    plt.title(f"Columns FFNN Training (Seed {FIXED_SEED})")
+    plt.title(f"Columns FFNN Training (Avg {EPISODES_PER_GENOME} eps)")
     plt.xlabel("Generations")
     plt.ylabel("Fitness (Score)")
     plt.grid()
@@ -104,45 +108,49 @@ def plot_species(statistics):
 # --- EVALUATION LOGIC ---
 
 def eval_genome(genome, config):
-    # 1. Network: FeedForward (FFNN)
     net = neat.nn.FeedForwardNetwork.create(genome, config)
     
-    # 2. Env Setup (OCAtari + Wrapper)
     try:
         env = OCAtari(GAME_NAME, mode="ram", hud=False, render_mode=None)
-        # Apply Column Wrapper (10 columns, skip 4 frames)
         env = SpaceInvadersColumnWrapper(env, n_columns=10, skip=4)
     except Exception:
         return 0.0
 
-    # 3. Deterministic Reset
-    observation, info = env.reset(seed=FIXED_SEED)
+    random.seed(os.getpid() + time.time())
     
-    # Check Input Size (Must match config: 96)
-    if len(observation) != 96:
-        print(f"⚠️ SIZE ERROR: Expected 96, got {len(observation)}")
-        env.close()
-        return 0.0
+    fitness_history = []
 
-    total_reward = 0.0
-    steps = 0
-    terminated = False
-    truncated = False
-    max_steps = 10000 
+    for _ in range(EPISODES_PER_GENOME):
+        current_seed = random.randint(TRAINING_SEED_MIN, TRAINING_SEED_MAX)
+        observation, info = env.reset(seed=current_seed)
+        
+        if len(observation) != 96:
+            env.close()
+            return 0.0
 
-    while not (terminated or truncated) and steps < max_steps:
-        inputs = observation
+        total_reward = 0.0
+        steps = 0
+        terminated = False
+        truncated = False
+        max_steps = 10000 
+
+        while not (terminated or truncated) and steps < max_steps:
+            inputs = observation
+            
+            outputs = net.activate(inputs)
+            action = np.argmax(outputs)
+            
+            observation, reward, terminated, truncated, info = env.step(action)
+            total_reward += reward
+            steps += 1
         
-        # FFNN Activation
-        outputs = net.activate(inputs)
-        action = np.argmax(outputs)
-        
-        observation, reward, terminated, truncated, info = env.step(action)
-        total_reward += reward
-        steps += 1
+        fitness_history.append(total_reward)
 
     env.close()
-    return total_reward
+    
+    if not fitness_history:
+        return 0.0
+    return np.mean(fitness_history)
 
 # --- MAIN ---
 
@@ -156,14 +164,12 @@ def run_columns():
                          neat.DefaultSpeciesSet, neat.DefaultStagnation,
                          str(CONFIG_PATH))
 
-    # Verify Config
     if config.genome_config.num_inputs != 96:
         print(f"❌ CONFIG ERROR: num_inputs is {config.genome_config.num_inputs}, must be 96!")
         return
 
     p = neat.Population(config)
     
-    # Reporters
     p.add_reporter(neat.StdOutReporter(True))
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
@@ -171,7 +177,6 @@ def run_columns():
     checkpoint_prefix = RESULTS_DIR / "neat-col-ffnn-checkpoint-"
     p.add_reporter(neat.Checkpointer(10, filename_prefix=str(checkpoint_prefix)))
 
-    # Multiprocessing
     num_workers = max(1, multiprocessing.cpu_count() - 2)
     print(f"🚀 Starting Columns FFNN Training on {num_workers} workers...")
     
@@ -183,12 +188,10 @@ def run_columns():
         print(f"\n🏆 Training Complete.")
         print(f"💎 Best Ever Fitness: {winner.fitness}")
         
-        # Save Winner
         with open(RESULTS_DIR / 'columns_winner_ffnn.pkl', 'wb') as f:
             pickle.dump(winner, f)
         print(f"💾 Saved to: columns_winner_ffnn.pkl")
 
-        # Generate Plots
         plot_stats(stats)
         plot_species(stats)
         

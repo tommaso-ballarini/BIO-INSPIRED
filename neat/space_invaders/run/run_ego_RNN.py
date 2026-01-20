@@ -29,10 +29,14 @@ CONFIG_PATH = project_root / 'config' / 'config_si_ego.txt'
 RESULTS_DIR = project_root / 'results'
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
-GAME_NAME = "SpaceInvadersNoFrameskip-v4"
-GENERATIONS = 30
-# IMPORTANT: No fixed seed for RNN training to ensure generalization
-print(f"✅ Config: {GAME_NAME} (RNN Mode - No Fixed Seed)")
+GAME_NAME = "ALE/SpaceInvaders-v5"
+GENERATIONS = 50
+TRAINING_SEED_MIN = 100
+TRAINING_SEED_MAX = 100000
+EPISODES_PER_GENOME = 3
+
+print(f"✅ Config: {GAME_NAME} (Egocentric RNN Mode)")
+print(f"🔄 Training: Average of {EPISODES_PER_GENOME} episodes (Seeds {TRAINING_SEED_MIN}+)")
 
 # --- PLOTTING FUNCTIONS ---
 
@@ -47,7 +51,7 @@ def plot_stats(statistics):
     plt.figure(figsize=(10, 6))
     plt.plot(generation, best_fitness, 'r-', label="Best Fitness")
     plt.plot(generation, avg_fitness, 'b-', label="Avg Fitness")
-    plt.title(f"Egocentric RNN Training")
+    plt.title(f"Egocentric RNN Training (Avg {EPISODES_PER_GENOME} eps)")
     plt.grid()
     plt.legend()
     
@@ -94,12 +98,9 @@ def plot_species(statistics):
 # --- EVALUATION LOGIC ---
 
 def eval_genome(genome, config):
-    # 1. Network: Recurrent (RNN)
     net = neat.nn.RecurrentNetwork.create(genome, config)
     
-    # 2. Env Setup
     try:
-        # Re-import for subprocess safety
         from ocatari.core import OCAtari
         env = OCAtari(GAME_NAME, mode="ram", hud=False, render_mode=None)
     except Exception:
@@ -107,25 +108,20 @@ def eval_genome(genome, config):
     
     env = SpaceInvadersEgocentricWrapper(env, skip=4)
     
-    # --- ROBUSTNESS: AVERAGE OF 3 EPISODES ---
-    n_episodes = 3
     total_fitness_acc = 0.0
     
-    # Ensure randomness in parallel processes
     random.seed(os.getpid() + time.time())
     
-    for _ in range(n_episodes):
-        # 3. Reset (No fixed seed for training)
-        observation, info = env.reset(seed=None)
+    for _ in range(EPISODES_PER_GENOME):
+        current_seed = random.randint(TRAINING_SEED_MIN, TRAINING_SEED_MAX)
+        observation, info = env.reset(seed=current_seed)
         
-        # 4. CRITICAL FIX: RANDOM NO-OPS
         # Desynchronize aliens by waiting 0-30 frames
         random_delay = random.randint(0, 30)
         for _ in range(random_delay):
-            observation, _, terminated, truncated, _ = env.step(0) # 0 = NOOP
+            observation, _, terminated, truncated, _ = env.step(0)
             if terminated or truncated: break
         
-        # Safety Check
         if len(observation) != 19:
             env.close()
             return 0.0
@@ -136,7 +132,6 @@ def eval_genome(genome, config):
         truncated = False
         max_steps = 6000 
         
-        # 5. RESET RNN MEMORY per episode!
         net.reset()
 
         while not (terminated or truncated) and steps < max_steps:
@@ -147,7 +142,6 @@ def eval_genome(genome, config):
             episode_reward += reward
             steps += 1
             
-        # Minimal survival bonus to differentiate early deaths
         if episode_reward == 0:
             episode_reward += (steps / 10000.0)
             
@@ -155,9 +149,7 @@ def eval_genome(genome, config):
 
     env.close()
 
-    # FINAL FITNESS = AVERAGE OF 3 RUNS
-    avg_fitness = total_fitness_acc / n_episodes
-    
+    avg_fitness = total_fitness_acc / EPISODES_PER_GENOME
     return max(0.001, avg_fitness)
 
 # --- MAIN ---
@@ -172,7 +164,6 @@ def run_training():
                          neat.DefaultSpeciesSet, neat.DefaultStagnation,
                          str(CONFIG_PATH))
 
-    # Verify Config
     if config.genome_config.num_inputs != 19:
         print(f"❌ CONFIG ERROR: num_inputs must be 19!")
         return
@@ -186,7 +177,6 @@ def run_training():
     checkpoint_prefix = RESULTS_DIR / "neat-rnn-chk-"
     p.add_reporter(neat.Checkpointer(10, filename_prefix=str(checkpoint_prefix)))
 
-    # Multiprocessing
     num_workers = max(1, multiprocessing.cpu_count() - 2)
     print(f"🚀 Starting RNN Training on {num_workers} workers...")
     
@@ -195,11 +185,9 @@ def run_training():
     try:
         winner = p.run(pe.evaluate, GENERATIONS)
         
-        # Save Winner
         with open(RESULTS_DIR / 'winner_ego.pkl', 'wb') as f:
             pickle.dump(winner, f)
         
-        # --- SAVE TOP 3 GENOMES ---
         all_genomes = list(p.population.values())
         all_genomes.sort(key=lambda g: g.fitness if g.fitness else 0.0, reverse=True)
         top_3 = all_genomes[:3]
@@ -211,7 +199,6 @@ def run_training():
         print(f"💾 Saved winner_ego.pkl")
         print(f"💾 Saved Top 3 list to: {top3_path.name}")
 
-        # Generate Plots
         plot_stats(stats)
         plot_species(stats)
         
