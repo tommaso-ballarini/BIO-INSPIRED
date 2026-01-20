@@ -24,13 +24,13 @@ except ImportError:
 
 # --- CONFIGURATION ---
 RESULTS_DIR = os.path.join(project_root, "evolution_results", "wrapper_ffnn_run")
-CONFIG_FILENAME = "config_wrapper_ffnn.txt"
+CONFIG_PATH = "config_wrapper_ffnn.txt"
 TEST_SEEDS = range(100)  # Benchmark on seeds 0 to 99
 
 def get_latest_winner():
     """Finds the most recent pickle file."""
     if not os.path.exists(RESULTS_DIR):
-        print(f"❌ Error: Directory {RESULTS_DIR} not found.")
+        print(f" Error: Directory {RESULTS_DIR} not found.")
         sys.exit(1)
 
     all_files = glob(os.path.join(RESULTS_DIR, "*.pkl"))
@@ -39,7 +39,7 @@ def get_latest_winner():
         sys.exit(1)
     
     latest_file = max(all_files, key=os.path.getctime)
-    print(f"📂 Loading genome from: {os.path.basename(latest_file)}")
+    print(f" Loading genome from: {os.path.basename(latest_file)}")
     
     with open(latest_file, 'rb') as f:
         data = pickle.load(f)
@@ -78,7 +78,6 @@ def run_simulation(genome, config, seed, render=False):
     observation, info = env.reset(seed=seed)
     
     # 2. Network Setup
-    # Using FeedForwardNetwork since this is the 'wrapper_ffnn' module
     net = neat.nn.FeedForwardNetwork.create(genome, config)
 
     done = False
@@ -90,19 +89,13 @@ def run_simulation(genome, config, seed, render=False):
         while not done:
             inputs = observation
             
-            # --- Network Activation ---
             output = net.activate(inputs)
             action = np.argmax(output) 
             
-            # --- Environment Step ---
             observation, reward, terminated, truncated, info = env.step(action)
             
-            # Accumulate scores
-            # Wrapper returns the Custom Fitness in 'reward'
             total_custom_fitness += reward
             
-            # Wrapper stores the raw Atari score in 'info' (if implemented)
-            # If not present, we assume native score is 0 or check if wrapper handles it
             native_r = info.get('native_reward', 0.0)
             total_native_score += native_r
             
@@ -110,17 +103,14 @@ def run_simulation(genome, config, seed, render=False):
             is_stuck = truncated
             steps += 1
             
-            # --- Visual Debugging (Only when rendering) ---
             if render and steps % 60 == 0:
                 target_status = "SEARCHING..."
-                # Assuming index 5 is 'target_exists' and 4 is 'distance' based on typical wrappers
                 if len(inputs) > 5 and inputs[5] > 0.5:
                     target_status = f"TARGET LOCKED (Dist: {inputs[4]:.2f})"
                 
-                # Print status overlay
                 sys.stdout.write(f"\rStep {steps} | Fitness: {total_custom_fitness:.1f} | {target_status}   ")
                 sys.stdout.flush()
-                time.sleep(0.01) # Slight delay for smooth viewing
+                time.sleep(0.01) 
 
     except KeyboardInterrupt:
         if render: print("\nStopped by user.")
@@ -134,7 +124,7 @@ def run_simulation(genome, config, seed, render=False):
 def main():
     # 1. Setup
     genome = get_latest_winner()
-    config_path = os.path.join(project_root, "config", CONFIG_FILENAME)
+    config_path = os.path.join(project_root, "config", CONFIG_PATH)
     
     config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
                          neat.DefaultSpeciesSet, neat.DefaultStagnation,
@@ -162,13 +152,13 @@ def main():
 
         results.append({
             'seed': seed,
-            'native': adjusted_native,      # For sorting
-            'real_native': native,          # For display
+            'native': adjusted_native, 
+            'real_native': native,  
             'custom': custom,
             'stuck': final_stuck_status
         })
 
-    # 3. Analysis
+    # --- 3. Analysis ---
     real_native_scores = [r['real_native'] for r in results]
     custom_scores = [r['custom'] for r in results]
     stuck_count = sum(r['stuck'] for r in results)
@@ -176,39 +166,56 @@ def main():
     avg_native = np.mean(real_native_scores)
     avg_custom = np.mean(custom_scores)
 
-    completed_runs = [r for r in results if r['custom'] > 9500]
+    perfect_runs = [r for r in results if r['custom'] > 9700]
+    num_perfect = len(perfect_runs)
     
-    if completed_runs:
-        best_overall_run = max(completed_runs, key=lambda x: x['real_native'])
-        best_label = "🏆 BEST COMPLETED RUN (Custom > 9500)"
+    if num_perfect > 0:
+        perfect_raw_scores = [r['real_native'] for r in perfect_runs]
+        
+        avg_native_perfect = np.mean(perfect_raw_scores)
+        std_native_perfect = np.std(perfect_raw_scores)
+        
+        best_overall_run = max(perfect_runs, key=lambda x: x['real_native'])
+        best_label = f"🏆 BEST PERFECT RUN (>9700)"
     else:
+        avg_native_perfect = 0.0
+        std_native_perfect = 0.0
         best_overall_run = max(results, key=lambda x: x['custom'])
-        best_label = "⚠️ BEST AVAILABLE (No run > 9500 found)"
+        best_label = "⚠️ BEST AVAILABLE (No perfect run found)"
 
     worst_native_run = min(results, key=lambda x: x['native'])
 
-    # 4. Final Report
+    # --- 4. Final Report ---
     print("\n" + "="*60)
-    print("📊 FINAL RESULTS (FFNN)")
+    print(" FINAL RESULTS (FFNN)")
     print("="*60)
-    print(f"Completed: {len(TEST_SEEDS)} | Stuck/Truncated: {stuck_count}")
-    print(f"AVERAGE PERFORMANCE:")
-    print(f"  ❄️  Native Score:   {avg_native:.2f}  (± {np.std(real_native_scores):.2f})")
-    print(f"  🎯  Custom Fitness: {avg_custom:.2f}  (± {np.std(custom_scores):.2f})")
+    print(f"Total Runs: {len(TEST_SEEDS)} | Stuck/Truncated: {stuck_count}")
+    
+    print("-" * 30)
+    print("🎯 PERFECT RUNS FILTER (> 9700 fitness):")
+    print(f"   -> Count: {num_perfect} / {len(TEST_SEEDS)} samples")
+    if num_perfect > 0:
+        print(f"   -> Avg Raw Score: {avg_native_perfect:.2f} (± {std_native_perfect:.2f})")
+    else:
+        print(f"   -> Avg Raw Score: N/A (0 runs passed the filter)")
+    print("-" * 30)
+
+    print(f"GLOBAL AVERAGE PERFORMANCE (All Runs):")
+    print(f"   ❄️  Native Score:   {avg_native:.2f}  (± {np.std(real_native_scores):.2f})")
+    print(f"   🎯  Custom Fitness: {avg_custom:.2f}  (± {np.std(custom_scores):.2f})")
     print("-" * 30)
     
     print("🏅 HALL OF FAME:")
     print(f"  {best_label}:")
-    print(f"     -> Seed {best_overall_run['seed']}")
-    print(f"     -> Native: {best_overall_run['real_native']:.1f}")
-    print(f"     -> Custom: {best_overall_run['custom']:.1f}")
+    print(f"    -> Seed {best_overall_run['seed']}")
+    print(f"    -> Native: {best_overall_run['real_native']:.1f}")
+    print(f"    -> Custom: {best_overall_run['custom']:.1f}")
     
     print("-" * 30)
     print(f"💩 WORST RUN (Seed {worst_native_run['seed']}): {worst_native_run['real_native']:.1f}")
     print("="*60)
 
-    # 5. Visualization Prompt
-    choice = input(f"\n🎥 Watch the BEST COMPLETED game (Seed {best_overall_run['seed']})? [y/N]: ").strip().lower()
+    choice = input(f"\n🎥 Watch the BEST RUN (Seed {best_overall_run['seed']})? [y/N]: ").strip().lower()
     if choice == 'y':
         print(f"Replaying Seed {best_overall_run['seed']}...")
         run_simulation(genome, config, best_overall_run['seed'], render=True)
