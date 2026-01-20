@@ -291,7 +291,7 @@ Since the native Atari score represents negative elapsed time, early termination
 | **Wr. Ego + RNN** | 1050.0 | 304 (±149) | Egocentric view improved tracking immediately. |
 | **Wr. Ego + RNN (ext)** | 1880.0 | 366 (±113) | Extended training budget (300 gens) yielded better results. |
 | **Wr. Ego + RNN + Fit (ext)** | **2380.0** | **421 (±120)** | In the best seed learned to snipe the UFO. |
-| *Human Benchmark* | *970.0* | *541.3 (±193.96)* | *Higher average score, but significanty lower peak.* |
+| *Human Benchmark* | *970.0* | *541.3 (±194)* | *Higher average score, but significanty lower peak.* |
 
 > **Key Insight:** This was the only environment where **Recurrent Neural Networks (RNN)** were strictly necessary. The agent needed memory to track projectile trajectories that momentarily disappeared or moved between sensors.
 
